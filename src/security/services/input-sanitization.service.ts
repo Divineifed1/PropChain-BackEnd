@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { SQL_INJECTION_PATTERNS } from '../../common/validators/sql-injection.validator';
-import { sanitizeXss, XSS_PATTERNS } from '../../common/validators/xss.validator';
+import { sanitizeXss } from '../../common/validators/xss.validator';
 
 @Injectable()
 export class InputSanitizationService {
@@ -77,9 +77,6 @@ export class InputSanitizationService {
       throw new BadRequestException(`Potential SQL injection detected in ${path}`);
     }
 
-    if (this.matchesPattern(value, XSS_PATTERNS)) {
-      throw new BadRequestException(`Potential XSS payload detected in ${path}`);
-    }
   }
 
   private containsIllegalControlCharacters(value: string): boolean {

@@ -39,15 +39,14 @@ describe('InputSanitizationService', () => {
     ).toThrow(BadRequestException);
   });
 
-  it('rejects obvious XSS payloads before request handling', () => {
-    expect(() =>
-      service.assertSafeRequestPayload(
-        {
-          query: '<script>alert(1)</script>',
-        },
-        'request.params',
-      ),
-    ).toThrow('Potential XSS payload detected in request.params.query');
+  it('sanitizes obvious XSS payloads instead of persisting raw markup', () => {
+    const sanitized = service.sanitizeRequestPayload({
+      query: '<script>alert(1)</script>',
+    });
+
+    expect(sanitized).toEqual({
+      query: '&lt;script&gt;alert(1)&lt;/script&gt;',
+    });
   });
 
   it('rejects control characters in string input', () => {
