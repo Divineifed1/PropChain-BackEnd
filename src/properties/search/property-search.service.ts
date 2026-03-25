@@ -104,14 +104,7 @@ export class PropertySearchService {
   }
 
   private async normalSearch(dto: PropertySearchDto) {
-    const {
-      page = 1,
-      limit = 10,
-      minPrice,
-      maxPrice,
-      location,
-      status: dtoStatus = PropertyStatus.AVAILABLE,
-    } = dto;
+    const { page = 1, limit = 10, minPrice, maxPrice, location, status: dtoStatus = PropertyStatus.AVAILABLE } = dto;
 
     const status = this.mapPropertyStatus(dtoStatus);
     const offset = (page - 1) * limit;

@@ -13,7 +13,10 @@ import { FileStorageService } from './storage/file-storage.service';
 import { SecureFileValidator } from '../security/validators/secure-file.validator';
 import { FileValidationService } from '../security/services/file-validation.service';
 import { MalwareScannerService } from '../security/services/malware-scanner.service';
-import { DocumentFilesUploadInterceptor, DocumentFileUploadInterceptor } from './interceptors/document-upload.interceptor';
+import {
+  DocumentFilesUploadInterceptor,
+  DocumentFileUploadInterceptor,
+} from './interceptors/document-upload.interceptor';
 
 @Module({
   controllers: [DocumentController],

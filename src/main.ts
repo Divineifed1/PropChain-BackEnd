@@ -71,26 +71,26 @@ async function bootstrap() {
   // CORS configuration with validation
   const corsOrigin = configService.get('CORS_ORIGIN');
   const nodeEnv = configService.get('NODE_ENV', 'development');
-  
+
   // Validate CORS origins before configuring
   const validatedOrigins = CorsOriginValidator.validate(corsOrigin, nodeEnv);
-  
+
   if (!validatedOrigins) {
     logger.error('Invalid CORS configuration detected. Application cannot start with insecure CORS settings.');
     if (nodeEnv === 'production' || nodeEnv === 'staging') {
       process.exit(1); // Fail hard in production/staging
     }
   }
-  
+
   const corsOrigins = CorsOriginValidator.parseForNestJs(corsOrigin);
-  
+
   app.enableCors({
     origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id'],
   });
-  
+
   logger.log(`CORS configured with origins: ${corsOrigins.join(', ')}`);
 
   // Global pipes

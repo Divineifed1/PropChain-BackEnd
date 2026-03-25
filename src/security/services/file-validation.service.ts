@@ -22,7 +22,10 @@ export class FileValidationService {
   private readonly logger = new Logger(FileValidationService.name);
 
   // Magic numbers for common file types (first bytes of files)
-  private readonly magicNumberSignatures: Record<string, { offset: number; bytes: string; mime: string; ext: string }[]> = {
+  private readonly magicNumberSignatures: Record<
+    string,
+    { offset: number; bytes: string; mime: string; ext: string }[]
+  > = {
     image: [
       { offset: 0, bytes: 'FFD8FF', mime: 'image/jpeg', ext: 'jpg' },
       { offset: 0, bytes: '89504E470D0A1A0A', mime: 'image/png', ext: 'png' },
@@ -37,11 +40,26 @@ export class FileValidationService {
     document: [
       { offset: 0, bytes: '255044462D', mime: 'application/pdf', ext: 'pdf' }, // %PDF-
       { offset: 0, bytes: 'D0CF11E0A1B11AE1', mime: 'application/msword', ext: 'doc' },
-      { offset: 0, bytes: '504B0304', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx' },
+      {
+        offset: 0,
+        bytes: '504B0304',
+        mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ext: 'docx',
+      },
       { offset: 0, bytes: '504B0304', mime: 'application/vnd.ms-excel', ext: 'xls' },
-      { offset: 0, bytes: '504B0304', mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx' },
+      {
+        offset: 0,
+        bytes: '504B0304',
+        mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ext: 'xlsx',
+      },
       { offset: 0, bytes: '504B0304', mime: 'application/vnd.ms-powerpoint', ext: 'ppt' },
-      { offset: 0, bytes: '504B0304', mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: 'pptx' },
+      {
+        offset: 0,
+        bytes: '504B0304',
+        mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ext: 'pptx',
+      },
     ],
     archive: [
       { offset: 0, bytes: '504B0304', mime: 'application/zip', ext: 'zip' },
@@ -70,13 +88,37 @@ export class FileValidationService {
 
   // Dangerous file extensions that should be blocked
   private readonly dangerousExtensions = [
-    '.exe', '.dll', '.so', '.dylib', // Executables
-    '.bat', '.cmd', '.sh', '.bash', '.ps1', '.vbs', '.js', '.jar', // Scripts
-    '.php', '.asp', '.aspx', '.jsp', '.cgi', // Web scripts
-    '.pl', '.py', '.rb', '.swf', // Other executables
-    '.msi', '.com', '.pif', '.scr', '.reg', // Windows executables
-    '.lnk', '.inf', '.drv', // System files
-    '.htaccess', '.htpasswd', // Apache config
+    '.exe',
+    '.dll',
+    '.so',
+    '.dylib', // Executables
+    '.bat',
+    '.cmd',
+    '.sh',
+    '.bash',
+    '.ps1',
+    '.vbs',
+    '.js',
+    '.jar', // Scripts
+    '.php',
+    '.asp',
+    '.aspx',
+    '.jsp',
+    '.cgi', // Web scripts
+    '.pl',
+    '.py',
+    '.rb',
+    '.swf', // Other executables
+    '.msi',
+    '.com',
+    '.pif',
+    '.scr',
+    '.reg', // Windows executables
+    '.lnk',
+    '.inf',
+    '.drv', // System files
+    '.htaccess',
+    '.htpasswd', // Apache config
   ];
 
   /**
@@ -84,7 +126,7 @@ export class FileValidationService {
    */
   validateFile(buffer: Buffer, declaredMimeType?: string): FileValidationResult {
     const errors: string[] = [];
-    
+
     if (!buffer || buffer.length === 0) {
       return {
         isValid: false,
@@ -94,7 +136,7 @@ export class FileValidationService {
 
     // Detect actual file type using magic numbers
     const detectedType = this.detectFileType(buffer);
-    
+
     if (!detectedType) {
       return {
         isValid: false,
@@ -104,9 +146,7 @@ export class FileValidationService {
 
     // Check for MIME type mismatch (potential spoofing attack)
     if (declaredMimeType && declaredMimeType !== detectedType.mime) {
-      errors.push(
-        `MIME type mismatch detected. Declared: ${declaredMimeType}, Actual: ${detectedType.mime}`,
-      );
+      errors.push(`MIME type mismatch detected. Declared: ${declaredMimeType}, Actual: ${detectedType.mime}`);
     }
 
     // Calculate checksum
@@ -133,9 +173,7 @@ export class FileValidationService {
    */
   isDangerousExtension(filename: string): boolean {
     const lowerFilename = filename.toLowerCase();
-    return this.dangerousExtensions.some(ext => 
-      lowerFilename.endsWith(ext) || lowerFilename.includes(ext + '.')
-    );
+    return this.dangerousExtensions.some(ext => lowerFilename.endsWith(ext) || lowerFilename.includes(`${ext}.`));
   }
 
   /**
@@ -172,7 +210,7 @@ export class FileValidationService {
    */
   private detectFileType(buffer: Buffer): FileTypeMatch | null {
     const hexHeader = buffer.toString('hex', 0, Math.min(16, buffer.length)).toUpperCase();
-    
+
     // Check all signature categories
     for (const category of Object.values(this.magicNumberSignatures)) {
       for (const signature of category) {
@@ -185,13 +223,13 @@ export class FileValidationService {
           if (signature.bytes.length > 8) {
             return { ext: signature.ext, mime: signature.mime };
           }
-          
+
           // For common signatures like PK (504B0304), do additional validation
           if (signature.bytes === '504B0304') {
             // ZIP-based formats - check further to distinguish
             return this.distinguishZipFormat(buffer, signature);
           }
-          
+
           return { ext: signature.ext, mime: signature.mime };
         }
       }
@@ -212,7 +250,7 @@ export class FileValidationService {
     try {
       // Look for mimetype markers in the ZIP structure
       const content = buffer.toString('binary');
-      
+
       if (content.includes('[Content_Types].xml')) {
         if (content.includes('word/')) {
           return { ext: 'docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
@@ -262,7 +300,7 @@ export class FileValidationService {
         .flat()
         .map(sig => sig.mime);
     }
-    
+
     const signatures = this.magicNumberSignatures[category] || [];
     return signatures.map(sig => sig.mime);
   }
@@ -284,7 +322,7 @@ export class FileValidationService {
     const wildcardMatches = allowedTypes.some(allowed => {
       if (allowed.endsWith('/*')) {
         const prefix = allowed.slice(0, -2);
-        return mimeType.startsWith(prefix + '/');
+        return mimeType.startsWith(`${prefix}/`);
       }
       return false;
     });

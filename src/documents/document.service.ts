@@ -433,13 +433,11 @@ export class DocumentService {
     if (this.malwareScanner) {
       const result = await this.malwareScanner.scanFile(buffer, filename);
       if (!result.isClean) {
-        throw new BadRequestException(
-          `Malware detected in file: ${result.virusName || 'Unknown virus'}`,
-        );
+        throw new BadRequestException(`Malware detected in file: ${result.virusName || 'Unknown virus'}`);
       }
       return;
     }
-    
+
     // Fallback to basic signature check if no malware scanner is available
     if (buffer.toString('utf8').includes(DocumentService.virusSignature)) {
       throw new BadRequestException('File failed virus scan');

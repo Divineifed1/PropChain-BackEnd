@@ -132,7 +132,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
       const chunks = this.chunkArray(job.urls, concurrency);
 
       for (const chunk of chunks) {
-        const promises = chunk.map((url) => this.warmUrl(url, job));
+        const promises = chunk.map(url => this.warmUrl(url, job));
         const results = await Promise.allSettled(promises);
 
         for (const promiseResult of results) {
@@ -207,7 +207,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
   async warmPopularContent(limit: number = 50): Promise<CacheWarmingResult> {
     // Get analytics to find popular content
     const analytics = await this.cacheService.getAnalytics();
-    const popularUrls = analytics.topAccessedEntries.slice(0, limit).map((entry) => entry.key);
+    const popularUrls = analytics.topAccessedEntries.slice(0, limit).map(entry => entry.key);
 
     const job: CacheWarmingJob = {
       id: uuidv4(),
@@ -228,10 +228,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
     return await this.executeJob(job.id);
   }
 
-  async warmUserBasedContent(
-    userId: string,
-    userPreferences?: Record<string, unknown>,
-  ): Promise<CacheWarmingResult> {
+  async warmUserBasedContent(userId: string, userPreferences?: Record<string, unknown>): Promise<CacheWarmingResult> {
     // Generate URLs based on user preferences and behavior
     const urls = this.generateUserBasedUrls(userId, userPreferences);
 
@@ -277,9 +274,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
     return await this.executeJob(job.id);
   }
 
-  async createStrategy(
-    strategy: Omit<CacheWarmingStrategy, 'id' | 'results'>,
-  ): Promise<CacheWarmingStrategy> {
+  async createStrategy(strategy: Omit<CacheWarmingStrategy, 'id' | 'results'>): Promise<CacheWarmingStrategy> {
     const newStrategy: CacheWarmingStrategy = {
       ...strategy,
       id: uuidv4(),
@@ -342,16 +337,14 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
     const resultsKey = `${this.resultsPrefix}recent`;
     const results = await this.redisService.lrange(resultsKey, 0, limit - 1);
 
-    return results.map((result) => JSON.parse(result));
+    return results.map(result => JSON.parse(result));
   }
 
   async getWarmingStats(days: number = 7): Promise<any> {
     const history = await this.getWarmingHistory(1000);
     const cutoffDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-    const recentHistory = history.filter(
-      (result) => new Date(result.startTime) >= cutoffDate,
-    );
+    const recentHistory = history.filter(result => new Date(result.startTime) >= cutoffDate);
 
     const stats = {
       totalJobs: recentHistory.length,
@@ -383,12 +376,8 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
       stats.dailyStats[day] = (stats.dailyStats[day] || 0) + 1;
     }
 
-    stats.successRate =
-      totalSuccesses + totalFailures > 0
-        ? totalSuccesses / (totalSuccesses + totalFailures)
-        : 0;
-    stats.averageDuration =
-      recentHistory.length > 0 ? totalDuration / recentHistory.length : 0;
+    stats.successRate = totalSuccesses + totalFailures > 0 ? totalSuccesses / (totalSuccesses + totalFailures) : 0;
+    stats.averageDuration = recentHistory.length > 0 ? totalDuration / recentHistory.length : 0;
 
     return stats;
   }
@@ -454,7 +443,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
 
     // Keep only last 30 days of history
     const history = await this.redisService.lrange(resultsKey, 0, -1);
-    const recentHistory = history.filter((record) => {
+    const recentHistory = history.filter(record => {
       const parsed = JSON.parse(record);
       return new Date(parsed.startTime) >= thirtyDaysAgo;
     });
@@ -526,14 +515,24 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
   private getContentTypeFromUrl(url: string): CacheContentType {
     const extension = url.split('.').pop()?.toLowerCase();
 
-    if (extension === 'css') return CacheContentType.CSS;
-    if (extension === 'js') return CacheContentType.JS;
+    if (extension === 'css') {
+      return CacheContentType.CSS;
+    }
+    if (extension === 'js') {
+      return CacheContentType.JS;
+    }
     if (['png', 'jpg', 'jpeg', 'gif', 'svg', 'ico'].includes(extension || '')) {
       return CacheContentType.IMAGE;
     }
-    if (extension === 'html') return CacheContentType.HTML;
-    if (extension === 'json') return CacheContentType.JSON;
-    if (extension === 'txt') return CacheContentType.TEXT;
+    if (extension === 'html') {
+      return CacheContentType.HTML;
+    }
+    if (extension === 'json') {
+      return CacheContentType.JSON;
+    }
+    if (extension === 'txt') {
+      return CacheContentType.TEXT;
+    }
 
     return CacheContentType.HTML; // Default
   }
@@ -546,10 +545,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
     return chunks;
   }
 
-  private generateUserBasedUrls(
-    userId: string,
-    preferences?: Record<string, unknown>,
-  ): string[] {
+  private generateUserBasedUrls(userId: string, preferences?: Record<string, unknown>): string[] {
     const urls: string[] = [];
 
     // Generate URLs based on user preferences
@@ -611,9 +607,7 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
     return urls;
   }
 
-  private async executeCustomStrategy(
-    strategy: CacheWarmingStrategy,
-  ): Promise<CacheWarmingResult> {
+  private async executeCustomStrategy(strategy: CacheWarmingStrategy): Promise<CacheWarmingResult> {
     const urls = (strategy.config.urls as string[]) || [];
 
     const job: CacheWarmingJob = {

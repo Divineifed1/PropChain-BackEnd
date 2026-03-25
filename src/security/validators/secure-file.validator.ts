@@ -41,10 +41,7 @@ export class SecureFileValidator {
 
     // 3. Validate file type using magic numbers (if enabled)
     if (config.validateMagicNumbers) {
-      const validationResult = this.fileValidationService.validateFile(
-        file.buffer,
-        file.mimetype,
-      );
+      const validationResult = this.fileValidationService.validateFile(file.buffer, file.mimetype);
 
       if (!validationResult.isValid) {
         throw new BadRequestException(
@@ -55,14 +52,9 @@ export class SecureFileValidator {
       // Check if detected MIME type is allowed
       if (
         validationResult.fileType &&
-        !this.fileValidationService.isMimeTypeAllowed(
-          validationResult.fileType.mime,
-          config.allowedMimeTypes,
-        )
+        !this.fileValidationService.isMimeTypeAllowed(validationResult.fileType.mime, config.allowedMimeTypes)
       ) {
-        throw new BadRequestException(
-          `File type '${validationResult.fileType.mime}' is not allowed`,
-        );
+        throw new BadRequestException(`File type '${validationResult.fileType.mime}' is not allowed`);
       }
     } else {
       // Fallback to basic MIME type check
@@ -75,10 +67,7 @@ export class SecureFileValidator {
 
     // 4. Scan for malware (if enabled)
     if (config.scanForMalware) {
-      const scanResult = await this.malwareScannerService.scanFile(
-        file.buffer,
-        file.originalname,
-      );
+      const scanResult = await this.malwareScannerService.scanFile(file.buffer, file.originalname);
 
       if (!scanResult.isClean) {
         throw new BadRequestException(
@@ -107,10 +96,12 @@ export class SecureFileValidator {
    * Format bytes to human-readable string
    */
   private formatBytes(bytes: number): string {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) {
+      return '0 Bytes';
+    }
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
   }
 }

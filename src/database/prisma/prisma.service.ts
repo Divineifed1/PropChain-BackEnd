@@ -6,6 +6,7 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient, Prisma } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { StructuredLoggerService } from '../../common/logging/logger.service';
+import { PerformanceMonitorService, QueryOptimizerService } from '../optimization';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -18,6 +19,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   constructor(
     private readonly configService: ConfigService,
     private readonly logger: StructuredLoggerService,
+    private readonly performanceMonitor?: PerformanceMonitorService,
+    private readonly queryOptimizer?: QueryOptimizerService,
   ) {
     // Get the database URL from environment/config
     let databaseUrl = configService.get<string>('DATABASE_URL');
@@ -73,6 +76,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         query: e.query,
         params: e.params,
       });
+
+      // Feed query timings into optimization/monitoring services when available
+      try {
+        this.queryOptimizer?.trackQuery(e.query, e.duration);
+        this.performanceMonitor?.recordQuery(e.query, e.duration, true);
+      } catch (err) {
+        // Do not disrupt DB operations if monitoring fails
+      }
     });
 
     await this.$connect();

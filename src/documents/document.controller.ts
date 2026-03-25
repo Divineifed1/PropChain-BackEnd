@@ -12,7 +12,10 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiHeader, ApiConsumes } from '@nestjs/swagger';
-import { DocumentFilesUploadInterceptor, DocumentFileUploadInterceptor } from './interceptors/document-upload.interceptor';
+import {
+  DocumentFilesUploadInterceptor,
+  DocumentFileUploadInterceptor,
+} from './interceptors/document-upload.interceptor';
 import { SecureFileValidator } from '../security/validators/secure-file.validator';
 import { DocumentAccessContext, DocumentMetadataInput, DocumentSearchFilters } from './document.model';
 import { DocumentService } from './document.service';
@@ -51,7 +54,7 @@ export class DocumentController {
     for (const file of files) {
       await this.secureFileValidator.validate(file);
     }
-    
+
     const context = this.buildAccessContext(userId, rolesHeader);
     const metadata = this.parseMetadataInput(body);
     return this.documentService.uploadDocuments(files, metadata, context);
@@ -74,7 +77,7 @@ export class DocumentController {
   ) {
     // Validate file with comprehensive security checks
     await this.secureFileValidator.validate(file);
-    
+
     const context = this.buildAccessContext(userId, rolesHeader);
     return this.documentService.addDocumentVersion(documentId, file, context);
   }

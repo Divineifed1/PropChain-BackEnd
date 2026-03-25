@@ -117,7 +117,8 @@ temp/
 *.sqlite3
 
 # Prisma
-prisma/migrations/
+# Keep migrations in git so schema/index changes are deployable.
+# (Avoid ignoring `prisma/migrations/`.)
 
 # Docker
 .dockerignore

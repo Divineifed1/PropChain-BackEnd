@@ -67,7 +67,7 @@ export class CorsValidationService {
       if (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
         return true;
       }
-      
+
       // Also check allowlist
       return this.allowedOrigins.has(origin);
     }
@@ -82,11 +82,11 @@ export class CorsValidationService {
   getOriginValidator(): (origin: string) => boolean {
     return (origin: string) => {
       const allowed = this.isOriginAllowed(origin);
-      
+
       if (!allowed && origin) {
         this.logger.warn(`Blocked CORS request from unauthorized origin: ${origin}`);
       }
-      
+
       return allowed;
     };
   }
@@ -116,9 +116,7 @@ export class CorsValidationService {
 
         // Warn about insecure origins in production
         if (origin.startsWith('http://') && !origin.includes('localhost')) {
-          this.logger.warn(
-            `Insecure HTTP origin detected in production: ${origin}. Consider using HTTPS.`,
-          );
+          this.logger.warn(`Insecure HTTP origin detected in production: ${origin}. Consider using HTTPS.`);
         }
       }
     }
@@ -151,9 +149,7 @@ export class CorsValidationService {
       totalOrigins: this.allowedOrigins.size,
       isProduction: this.isProduction,
       isWildcard: this.allowedOrigins.has('*'),
-      hasLocalhost: Array.from(this.allowedOrigins).some(o => 
-        o.includes('localhost') || o.includes('127.0.0.1'),
-      ),
+      hasLocalhost: Array.from(this.allowedOrigins).some(o => o.includes('localhost') || o.includes('127.0.0.1')),
     };
   }
 
@@ -162,16 +158,10 @@ export class CorsValidationService {
    */
   private getProductionCorsConfig(): CorsOriginConfig {
     const validation = this.validateConfig();
-    
+
     if (!validation.isValid) {
-      this.logger.error(
-        'Production CORS configuration is invalid:',
-        validation.errors.join(', '),
-        {},
-      );
-      throw new BadRequestException(
-        `Invalid CORS configuration: ${validation.errors.join(', ')}`,
-      );
+      this.logger.error('Production CORS configuration is invalid:', validation.errors.join(', '), {});
+      throw new BadRequestException(`Invalid CORS configuration: ${validation.errors.join(', ')}`);
     }
 
     return {
@@ -192,10 +182,7 @@ export class CorsValidationService {
         'x-correlation-id',
         'Accept-Version',
       ]),
-      exposedHeaders: this.configService.get<string[]>('CORS_EXPOSED_HEADERS', [
-        'x-correlation-id',
-        'x-request-id',
-      ]),
+      exposedHeaders: this.configService.get<string[]>('CORS_EXPOSED_HEADERS', ['x-correlation-id', 'x-request-id']),
       maxAge: this.configService.get<number>('CORS_MAX_AGE', 86400), // 24 hours
     };
   }
@@ -283,11 +270,9 @@ export class CorsValidationService {
    */
   private logConfiguration(): void {
     const stats = this.getStats();
-    
+
     if (this.isProduction) {
-      this.logger.log(
-        `🔒 Production CORS configured with ${stats.totalOrigins} allowed origin(s)`,
-      );
+      this.logger.log(`🔒 Production CORS configured with ${stats.totalOrigins} allowed origin(s)`);
       if (stats.totalOrigins > 0) {
         this.logger.debug(`Allowed origins: ${Array.from(this.allowedOrigins).join(', ')}`);
       }
@@ -295,9 +280,7 @@ export class CorsValidationService {
       if (stats.isWildcard) {
         this.logger.warn('⚠️  Development CORS: Wildcard (*) enabled - OK for local development');
       } else {
-        this.logger.log(
-          `🔧 Development CORS configured with ${stats.totalOrigins} allowed origin(s)`,
-        );
+        this.logger.log(`🔧 Development CORS configured with ${stats.totalOrigins} allowed origin(s)`);
       }
     } else {
       this.logger.log(`🧪 Test CORS configured`);

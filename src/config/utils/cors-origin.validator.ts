@@ -61,7 +61,9 @@ export class CorsOriginValidator {
 
       // Validate URL format (basic check)
       if (!urlPattern.test(origin)) {
-        console.error(`[CorsOriginValidator] Invalid origin format: "${origin}". Expected valid URL (e.g., https://example.com)`);
+        console.error(
+          `[CorsOriginValidator] Invalid origin format: "${origin}". Expected valid URL (e.g., https://example.com)`,
+        );
         return false;
       }
 

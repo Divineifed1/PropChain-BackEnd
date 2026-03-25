@@ -19,7 +19,7 @@ export function createMulterConfig(configService: ConfigService) {
       fieldNameSize: 100, // Max field name length
       headerPairs: 2000, // Max number of header pairs
     },
-    
+
     // File filter for basic MIME type checking
     fileFilter: (req: any, file: Express.Multer.File, cb: any) => {
       if (!allowedMimeTypes.includes(file.mimetype)) {
@@ -27,28 +27,42 @@ export function createMulterConfig(configService: ConfigService) {
         (error as any).code = 'UNSUPPORTED_MEDIA_TYPE';
         return cb(error, false);
       }
-      
+
       // Validate filename
       if (!file.originalname || file.originalname.length === 0) {
         const error = new Error('Invalid filename');
         (error as any).code = 'INVALID_FILENAME';
         return cb(error, false);
       }
-      
+
       // Check for dangerous extensions
       const dangerousExtensions = [
-        '.exe', '.dll', '.so', '.bat', '.cmd', '.sh', 
-        '.php', '.asp', '.aspx', '.jsp', '.cgi',
-        '.pl', '.py', '.rb', '.msi', '.com', '.pif',
+        '.exe',
+        '.dll',
+        '.so',
+        '.bat',
+        '.cmd',
+        '.sh',
+        '.php',
+        '.asp',
+        '.aspx',
+        '.jsp',
+        '.cgi',
+        '.pl',
+        '.py',
+        '.rb',
+        '.msi',
+        '.com',
+        '.pif',
       ];
-      
+
       const lowerName = file.originalname.toLowerCase();
       if (dangerousExtensions.some(ext => lowerName.endsWith(ext))) {
         const error = new Error('Dangerous file type detected');
         (error as any).code = 'DANGEROUS_FILE_TYPE';
         return cb(error, false);
       }
-      
+
       cb(null, true);
     },
   };

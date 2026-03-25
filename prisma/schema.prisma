@@ -74,6 +74,7 @@ model UserActivity {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  @@index([userId, action, createdAt(sort: Desc)])
   @@map("user_activities")
 }
 
@@ -91,6 +92,8 @@ model UserRelationship {
   @@unique([followerId, followingId])
   @@index([followerId])
   @@index([followingId])
+  @@index([followingId, status, createdAt(sort: Desc)])
+  @@index([followerId, status, createdAt(sort: Desc)])
   @@map("user_relationships")
 }
 
@@ -136,6 +139,9 @@ model Property {
   @@index([location]) // For searching/filtering by location
   // Consider adding an index on price if you often filter/sort by price
   @@index([price])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([ownerId, createdAt(sort: Desc)])
+  @@index([status, price])
   @@map("properties")
 }
 
@@ -156,6 +162,7 @@ model PropertyValuation {
   // Index for fast lookup by property and date
   @@index([propertyId])
   @@index([valuationDate])
+  @@index([propertyId, valuationDate(sort: Desc)])
   @@map("property_valuations")
 }
 
@@ -266,6 +273,10 @@ model AuditLog {
   userId    String?  @map("user_id")
   timestamp DateTime @default(now())
 
+  @@index([timestamp(sort: Desc)])
+  @@index([userId, timestamp(sort: Desc)])
+  @@index([tableName, timestamp(sort: Desc)])
+  @@index([operation, timestamp(sort: Desc)])
   @@map("audit_logs")
 }
 
@@ -277,6 +288,9 @@ model SystemLog {
   context    String?
   timestamp DateTime @default(now())
 
+  @@index([timestamp(sort: Desc)])
+  @@index([logLevel, timestamp(sort: Desc)])
+  @@index([context, timestamp(sort: Desc)])
   @@map("system_logs")
 }
 
