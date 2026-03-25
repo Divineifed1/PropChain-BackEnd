@@ -95,6 +95,7 @@ export class FeatureFlagMiddleware implements NestMiddleware {
       context.email = req.user.email;
       context.role = req.user.role;
 
+      // Add custom user attributes
       if (req.user.plan) {
         context.customAttributes!.plan = req.user.plan;
       }
