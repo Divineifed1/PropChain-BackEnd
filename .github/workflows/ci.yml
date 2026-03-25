@@ -178,6 +178,49 @@ jobs:
           path: dist/
           retention-days: 1
 
+  load-test:
+    name: Load Testing
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install k6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gnupg2 software-properties-common
+          sudo wget -q -O - https://dl.k6.io/key.gpg | sudo apt-key add -
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Start API in background
+        run: |
+          npm run start &
+          sleep 10
+
+      - name: Run load tests
+        run: npm run loadtest:ci
+        env:
+          API_URL: http://localhost:3000
+          NODE_ENV: test
+
+      - name: Upload k6 results
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: artifacts/k6-results.json
+
   deploy-staging:
     name: Deploy to Staging
     needs: [build, test-integration, test-e2e, test-security]

@@ -52,6 +52,8 @@
     "db:backup": "bash scripts/backup.sh",
     "db:restore": "bash scripts/restore.sh",
     "db:benchmark": "ts-node test/database/performance.benchmark.ts",
+    "loadtest": "npx k6 run loadtests/propchain-loadtest.js",
+    "loadtest:ci": "npx k6 run --out json=artifacts/k6-results.json loadtests/propchain-loadtest.js",
     "docs:generate": "typedoc --skipErrorChecking"
   },
   "dependencies": {
