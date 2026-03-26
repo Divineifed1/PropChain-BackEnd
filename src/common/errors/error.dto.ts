@@ -2,16 +2,16 @@ import { ApiProperty } from '@nestjs/swagger';
 
 export class ErrorResponseDto {
   @ApiProperty({
+    description: 'Indicates if the operation was successful (always false for errors)',
+    example: false,
+  })
+  success: boolean = false;
+
+  @ApiProperty({
     description: 'HTTP status code',
     example: 400,
   })
   statusCode: number;
-
-  @ApiProperty({
-    description: 'Application-specific error code',
-    example: 'VALIDATION_ERROR',
-  })
-  errorCode: string;
 
   @ApiProperty({
     description: 'User-friendly error message',
@@ -20,12 +20,23 @@ export class ErrorResponseDto {
   message: string;
 
   @ApiProperty({
-    description: 'Detailed error information',
-    example: ['email must be a valid email address'],
-    required: false,
-    type: [String],
+    description: 'Response data payload (always null for errors)',
+    example: null,
   })
-  details?: string[];
+  data: null = null;
+
+  @ApiProperty({
+    description: 'Error details',
+    type: 'object',
+    properties: {
+      code: { type: 'string', example: 'VALIDATION_ERROR' },
+      details: { type: 'array', items: { type: 'string' }, example: ['email must be a valid email address'] },
+    },
+  })
+  error: {
+    code: string;
+    details?: string[];
+  };
 
   @ApiProperty({
     description: 'Timestamp of the error',
@@ -49,5 +60,7 @@ export class ErrorResponseDto {
   constructor(partial: Partial<ErrorResponseDto>) {
     Object.assign(this, partial);
     this.timestamp = this.timestamp || new Date().toISOString();
+    this.success = false;
+    this.data = null;
   }
 }

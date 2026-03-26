@@ -3,31 +3,25 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { Request } from 'express';
 import { StructuredLoggerService } from '../logging/logger.service';
-
-export interface Response<T> {
-  success: boolean;
-  statusCode: number;
-  message: string;
-  data?: T;
-  timestamp: string;
-  path: string;
-  method: string;
-}
+import { ApiResponseDto } from '../dtos/api-response.dto';
+import { getCorrelationId } from '../logging/correlation-id';
 
 @Injectable()
-export class ResponseInterceptor<T> implements NestInterceptor<T, Response<T>> {
+export class ResponseInterceptor<T> implements NestInterceptor<T, ApiResponseDto<T>> {
   constructor(private readonly loggerService: StructuredLoggerService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<Response<T>> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<ApiResponseDto<T>> {
     const request = context.switchToHttp().getRequest<Request>();
     const startTime = Date.now();
     const userId = (request as any).user?.id;
+    const correlationId = getCorrelationId();
 
     return next.handle().pipe(
       map(data => {
         const duration = Date.now() - startTime;
         const response = context.switchToHttp().getResponse();
         const statusCode = response.statusCode;
+
         this.loggerService.logResponse(request.method, request.url, statusCode, duration, {
           userId,
         });
@@ -38,15 +32,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<T, Response<T>> {
           message = this.getSuccessMessage(request.method);
         }
 
-        return {
-          success: true,
-          statusCode,
-          message,
-          data,
-          timestamp: new Date().toISOString(),
-          path: request.url,
-          method: request.method,
-        };
+        return ApiResponseDto.success(data, message, statusCode, request.url, correlationId);
       }),
     );
   }

@@ -34,7 +34,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const correlationId = getCorrelationId();
 
     this.loggerService.error(
-      `Error occurred: ${errorResponse.errorCode} - ${errorResponse.message}`,
+      `Error occurred: ${errorResponse.error.code} - ${errorResponse.message}`,
       exception instanceof Error ? exception.stack : undefined,
       {
         requestId,
@@ -42,7 +42,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         path: request.url,
         method: request.method,
         statusCode: errorResponse.statusCode,
-        details: errorResponse.details,
+        details: errorResponse.error.details,
       },
     );
 
@@ -50,7 +50,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (alertWebhookUrl && errorResponse.statusCode >= 500) {
       axios
         .post(alertWebhookUrl, {
-          errorCode: errorResponse.errorCode,
+          errorCode: errorResponse.error.code,
           message: errorResponse.message,
           statusCode: errorResponse.statusCode,
           path: request.url,
@@ -97,19 +97,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = exceptionResponse.toString();
     }
 
-    const payload: Partial<ErrorResponseDto> = {
+    return new ErrorResponseDto({
       statusCode: status,
-      errorCode,
       message,
       path: request.url,
       requestId,
-    };
-
-    if (details) {
-      (payload as any).details = details;
-    }
-
-    return new ErrorResponseDto(payload);
+      error: {
+        code: errorCode,
+        details,
+      },
+    });
   }
 
   private handleUnknownException(exception: unknown, request: Request, requestId: string): ErrorResponseDto {
@@ -126,19 +123,16 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const details =
       process.env.NODE_ENV !== 'production' && exception instanceof Error ? [exception.message] : undefined;
 
-    const payload: Partial<ErrorResponseDto> = {
+    return new ErrorResponseDto({
       statusCode: status,
-      errorCode,
       message,
       path: request.url,
       requestId,
-    };
-
-    if (details) {
-      (payload as any).details = details;
-    }
-
-    return new ErrorResponseDto(payload);
+      error: {
+        code: errorCode,
+        details,
+      },
+    });
   }
 
   private mapStatusToErrorCode(status: HttpStatus): ErrorCode {
