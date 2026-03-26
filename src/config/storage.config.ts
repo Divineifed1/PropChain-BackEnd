@@ -4,6 +4,7 @@ export interface StorageConfig {
   provider: StorageProviderName;
   signedUrlExpiresInSeconds: number;
   signingSecret: string;
+  mockStorageBaseUrl: string;
   maxFileSizeBytes: number;
   allowedMimeTypes: string[];
   thumbnails: {
@@ -26,6 +27,7 @@ export default (): StorageConfig => ({
   provider: (process.env.STORAGE_PROVIDER as StorageProviderName) || 's3',
   signedUrlExpiresInSeconds: parseInt(process.env.STORAGE_SIGNED_URL_EXPIRES_IN, 10) || 900,
   signingSecret: process.env.STORAGE_SIGNING_SECRET || 'local-storage-signing-secret',
+  mockStorageBaseUrl: process.env.MOCK_STORAGE_BASE_URL || 'http://localhost/mock-storage',
   maxFileSizeBytes: parseInt(process.env.MAX_FILE_SIZE, 10) || 10 * 1024 * 1024,
   allowedMimeTypes: process.env.ALLOWED_FILE_TYPES?.split(',') || [
     'image/jpeg',

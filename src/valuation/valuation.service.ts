@@ -27,15 +27,15 @@ export class ValuationService {
   ) {
     this.externalApis = {
       zillow: {
-        baseUrl: 'https://api.zillow.com/v1',
+        baseUrl: this.configService.get('valuation.externalApi.zillowBaseUrl'),
         apiKey: this.configService.get('valuation.externalApi.zillowApiKey'),
       },
       redfin: {
-        baseUrl: 'https://api.redfin.com/v1',
+        baseUrl: this.configService.get('valuation.externalApi.redfinBaseUrl'),
         apiKey: this.configService.get('valuation.externalApi.redfinApiKey'),
       },
       corelogic: {
-        baseUrl: 'https://api.corelogic.com/v1',
+        baseUrl: this.configService.get('valuation.externalApi.coreLogicBaseUrl'),
         apiKey: this.configService.get('valuation.externalApi.corelogicApiKey'),
       },
     };

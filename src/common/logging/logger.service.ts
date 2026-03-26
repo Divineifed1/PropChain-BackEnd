@@ -15,7 +15,12 @@ export class StructuredLoggerService implements NestLoggerService {
 
   constructor(private readonly configService: ConfigService) {
     const environment = this.configService.get<string>('NODE_ENV', 'development');
-    this.logger = createWinstonLogger(environment);
+    const options = {
+      level: this.configService.get<string>('LOG_LEVEL'),
+      errorRetention: this.configService.get<string>('LOG_ERROR_RETENTION_DAYS'),
+      appRetention: this.configService.get<string>('LOG_APP_RETENTION_DAYS'),
+    };
+    this.logger = createWinstonLogger(environment, options);
   }
 
   /**

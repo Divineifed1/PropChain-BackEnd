@@ -66,6 +66,7 @@ export const configValidationSchema = Joi.object({
     'cors.origin.invalidFormat': 'Invalid origin format: "{{origin}}". Must be a valid URL (e.g., https://example.com)',
   }),
   SWAGGER_ENABLED: Joi.boolean().default(true),
+  API_VERSIONING_ENABLED: Joi.boolean().default(true),
 
   // Database
   DATABASE_URL: Joi.string().uri().required(),
@@ -94,6 +95,9 @@ export const configValidationSchema = Joi.object({
     .required(), // Ethereum private key format
   ETHERSCAN_API_KEY: Joi.string().optional(),
   WEB3_STORAGE_TOKEN: Joi.string().optional(),
+  ETH_RPC: Joi.string().uri().optional(),
+  POLYGON_RPC: Joi.string().uri().optional(),
+  BSC_RPC: Joi.string().uri().optional(),
 
   // IPFS
   IPFS_GATEWAY_URL: Joi.string().uri().default('https://ipfs.io/ipfs/'),
@@ -144,6 +148,8 @@ export const configValidationSchema = Joi.object({
   // Monitoring
   SENTRY_DSN: Joi.string().uri().optional(),
   LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly').default('info'),
+  LOG_ERROR_RETENTION_DAYS: Joi.string().default('30d'),
+  LOG_APP_RETENTION_DAYS: Joi.string().default('14d'),
 
   // External Services
   COINGECKO_API_KEY: Joi.string().optional(),
@@ -176,6 +182,7 @@ export const configValidationSchema = Joi.object({
   THUMBNAIL_HEIGHT: Joi.number().default(320),
   THUMBNAIL_FORMAT: Joi.string().valid('jpeg', 'png', 'webp').default('webp'),
   THUMBNAIL_QUALITY: Joi.number().min(1).max(100).default(80),
+  MOCK_STORAGE_BASE_URL: Joi.string().uri().default('http://localhost/mock-storage'),
 
   // S3 Configuration
   S3_BUCKET: Joi.string().default('propchain-documents'),
@@ -187,9 +194,13 @@ export const configValidationSchema = Joi.object({
 
   // Valuation Configuration
   ZILLOW_API_KEY: Joi.string().optional(),
+  ZILLOW_BASE_URL: Joi.string().uri().default('https://api.zillow.com/v1'),
   REDFIN_API_KEY: Joi.string().optional(),
+  REDFIN_BASE_URL: Joi.string().uri().default('https://api.redfin.com/v1'),
   CORE_LOGIC_API_KEY: Joi.string().optional(),
+  CORE_LOGIC_BASE_URL: Joi.string().uri().default('https://api.corelogic.com/v1'),
   MAXMIND_LICENSE_KEY: Joi.string().optional(),
+  MAXMIND_API_URL: Joi.string().uri().default('https://geolite.maxmind.com/geoip/v2.1'),
   VALUATION_CONFIDENCE_THRESHOLD: Joi.number().min(0).max(1).default(0.7),
   VALUATION_CACHE_TTL: Joi.number().default(86400), // 24 hours
   VALUATION_MAX_RETRIES: Joi.number().default(3),
@@ -204,4 +215,8 @@ export const configValidationSchema = Joi.object({
   AGE_WEIGHT: Joi.number().min(0).max(1).default(0.15),
   AMENITIES_WEIGHT: Joi.number().min(0).max(1).default(0.2),
   MARKET_CONDITIONS_WEIGHT: Joi.number().min(0).max(1).default(0.1),
+
+  // Health Checks
+  HEALTH_CHECK_URL_TEMPLATE: Joi.string().default('http://{{region}}-api.propchain.local/health'),
+  LOCAL_HEALTH_CHECK_URL: Joi.string().uri().default('http://localhost:3000/health'),
 });

@@ -418,8 +418,10 @@ export class DisasterRecoveryService {
       }
 
       // Run health checks
+      const healthCheckTemplate = this.configService.get<string>('HEALTH_CHECK_URL_TEMPLATE');
+      const healthUrl = healthCheckTemplate.replace('{{region}}', region);
       const healthResponse = await execAsync(`
-        curl -f http://${region}-api.propchain.local/health || exit 1
+        curl -f ${healthUrl} || exit 1
       `);
 
       // Validate data consistency
@@ -470,8 +472,10 @@ export class DisasterRecoveryService {
    */
   private async performHealthCheck(region: string): Promise<boolean> {
     try {
+      const healthCheckTemplate = this.configService.get<string>('HEALTH_CHECK_URL_TEMPLATE');
+      const healthUrl = healthCheckTemplate.replace('{{region}}', region);
       await execAsync(`
-        curl -sf http://${region}-api.propchain.local/health >/dev/null && echo "HEALTHY" || echo "UNHEALTHY"
+        curl -sf ${healthUrl} >/dev/null && echo "HEALTHY" || echo "UNHEALTHY"
       `);
       return true;
     } catch {
@@ -577,7 +581,8 @@ export class DisasterRecoveryService {
 
     try {
       // Basic API tests
-      await execAsync(`curl -sf http://localhost:3000/health`);
+      const localHealthUrl = this.configService.get<string>('LOCAL_HEALTH_CHECK_URL');
+      await execAsync(`curl -sf ${localHealthUrl}`);
       return true;
     } catch {
       return false;

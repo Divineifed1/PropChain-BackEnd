@@ -82,6 +82,9 @@ export class ConfigLoader {
       'WEB3_STORAGE_TOKEN',
       'IPFS_PROJECT_ID',
       'IPFS_PROJECT_SECRET',
+      'ETH_RPC',
+      'POLYGON_RPC',
+      'BSC_RPC',
     ];
 
     const encryptionKey = env.ENCRYPTION_KEY;

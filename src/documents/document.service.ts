@@ -58,7 +58,7 @@ export class InMemoryStorageProvider implements StorageProvider {
       .createHmac('sha256', this.config.signingSecret)
       .update(`${method}:${key}:${expiresAt}`)
       .digest('hex');
-    return `http://localhost/mock-storage/${encodeURIComponent(key)}?expires=${expiresAt}&signature=${signature}`;
+    return `${this.config.mockStorageBaseUrl}/${encodeURIComponent(key)}?expires=${expiresAt}&signature=${signature}`;
   }
 
   getObject(key: string): StorageUploadRequest | undefined {

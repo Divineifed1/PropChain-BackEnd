@@ -92,16 +92,23 @@ const redactFormat = () => {
   });
 };
 
+export interface LoggerOptions {
+  level?: string;
+  errorRetention?: string;
+  appRetention?: string;
+}
+
 /**
  * Create Winston logger with structured JSON format
  */
-export const createWinstonLogger = (environment: string): winston.Logger => {
+export const createWinstonLogger = (environment: string, options: LoggerOptions = {}): winston.Logger => {
   const isProduction = environment === 'production';
-  const errorRetention = process.env.LOG_ERROR_RETENTION_DAYS || '30d';
-  const appRetention = process.env.LOG_APP_RETENTION_DAYS || '14d';
+  const errorRetention = options.errorRetention || '30d';
+  const appRetention = options.appRetention || '14d';
+  const logLevel = options.level || (isProduction ? 'info' : 'debug');
 
   return winston.createLogger({
-    level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+    level: logLevel,
     format: winston.format.combine(
       winston.format.timestamp({
         format: 'YYYY-MM-DD HH:mm:ss.SSS',

@@ -4,9 +4,13 @@ export default registerAs('valuation', () => ({
   // External API settings
   externalApi: {
     zillowApiKey: process.env.ZILLOW_API_KEY,
+    zillowBaseUrl: process.env.ZILLOW_BASE_URL || 'https://api.zillow.com/v1',
     redfinApiKey: process.env.REDFIN_API_KEY,
+    redfinBaseUrl: process.env.REDFIN_BASE_URL || 'https://api.redfin.com/v1',
     coreLogicApiKey: process.env.CORE_LOGIC_API_KEY,
+    coreLogicBaseUrl: process.env.CORE_LOGIC_BASE_URL || 'https://api.corelogic.com/v1',
     maxmindLicenseKey: process.env.MAXMIND_LICENSE_KEY,
+    maxmindApiUrl: process.env.MAXMIND_API_URL || 'https://geolite.maxmind.com/geoip/v2.1',
   },
 
   // Valuation settings
