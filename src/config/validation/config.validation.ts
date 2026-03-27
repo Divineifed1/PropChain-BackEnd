@@ -227,4 +227,10 @@ export const configValidationSchema = Joi.object({
   // Health Checks
   HEALTH_CHECK_URL_TEMPLATE: Joi.string().default('http://{{region}}-api.propchain.local/health'),
   LOCAL_HEALTH_CHECK_URL: Joi.string().uri().default('http://localhost:3000/health'),
+
+  // Stellar Configuration
+  STELLAR_NETWORK: Joi.string().valid('public', 'testnet').default('testnet'),
+  STELLAR_SECRET_KEY: Joi.string().optional(), // Encrypted platform secret key
+  STELLAR_BASE_FEE: Joi.number().default(100), // Base fee in stroops
+  STELLAR_TIMEOUT: Joi.number().default(30000), // Transaction timeout in ms
 });
