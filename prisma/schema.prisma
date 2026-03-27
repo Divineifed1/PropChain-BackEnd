@@ -207,6 +207,30 @@ model Transaction {
   @@map("transactions")
 }
 
+model Donation {
+  id                    String         @id @default(cuid())
+  provider              String
+  providerTransactionId String         @unique @map("provider_transaction_id")
+  amount                Decimal
+  currency              String
+  donorName             String?        @map("donor_name")
+  donorEmail            String?        @map("donor_email")
+  blockchainHash        String?        @map("blockchain_hash")
+  status                DonationStatus @default(PENDING)
+  createdAt             DateTime       @default(now()) @map("created_at")
+  updatedAt             DateTime       @updatedAt @map("updated_at")
+
+  @@index([provider])
+  @@index([status])
+  @@map("donations")
+}
+
+enum DonationStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+}
+
 model Role {
   id          String   @id @default(cuid())
   name        String   @unique

@@ -45,6 +45,7 @@ import { createRedisConfig } from './common/services/redis.config';
 import { PropertiesModule } from './properties/properties.module';
 import { UsersModule } from './users/users.module';
 import { TransactionsModule } from './transactions/transactions.module';
+import { DonationsModule } from './donations/donations.module';
 import { BlockchainModule } from './blockchain/blockchain.module';
 import { AuthModule } from './auth/auth.module';
 import { FilesModule } from './files/files.module';
@@ -182,6 +183,9 @@ import { BoundaryValidationModule } from './common/validation';
 
     // Data Export
     ExportModule,
+
+    // Donations
+    DonationsModule,
 
     // Compression
     CompressionModule,

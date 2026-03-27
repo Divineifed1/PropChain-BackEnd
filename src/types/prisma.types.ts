@@ -62,6 +62,20 @@ export interface PrismaTransaction {
   updatedAt: Date;
 }
 
+export interface PrismaDonation {
+  id: string;
+  provider: string;
+  providerTransactionId: string;
+  amount: any; // Will be Decimal when Prisma is available
+  currency: string;
+  donorName?: string | null;
+  donorEmail?: string | null;
+  blockchainHash?: string | null;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface PrismaRole {
   id: string;
   name: string;
