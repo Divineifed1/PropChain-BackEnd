@@ -139,11 +139,12 @@ model Property {
   @@index([status]) // For filtering by property status
   @@index([createdAt]) // For sorting/filtering by creation date
   @@index([location]) // For searching/filtering by location
-  // Consider adding an index on price if you often filter/sort by price
-  @@index([price])
-  @@index([status, createdAt(sort: Desc)])
-  @@index([ownerId, createdAt(sort: Desc)])
-  @@index([status, price])
+  @@index([price]) // For price filtering/sorting
+  @@index([status, createdAt(sort: Desc)]) // For property listings by status and date
+  @@index([ownerId, createdAt(sort: Desc)]) // For owner's properties by date
+  @@index([status, price]) // For property search by status and price
+  @@unique([ownerId, title, location]) // Prevent duplicate properties for same owner with same title and location
+  @@unique([latitude, longitude, ownerId]) // Prevent duplicate properties at same coordinates for same owner
   @@map("properties")
 }
 
@@ -165,6 +166,7 @@ model PropertyValuation {
   @@index([propertyId])
   @@index([valuationDate])
   @@index([propertyId, valuationDate(sort: Desc)])
+  @@unique([propertyId, valuationDate, source]) // Prevent duplicate valuations for same property on same date from same source
   @@map("property_valuations")
 }
 
@@ -173,7 +175,7 @@ model Transaction {
   fromAddress   String            @map("from_address")
   toAddress     String            @map("to_address")
   amount        Decimal
-  txHash        String?           @map("tx_hash")
+  txHash        String?           @unique @map("tx_hash") // Unique constraint for blockchain transaction hash
   status        TransactionStatus  @default(PENDING)
   type          TransactionType
   propertyId    String?           @map("property_id")
@@ -183,7 +185,7 @@ model Transaction {
   buyerId           String
   sellerId          String
   currency          String
-  blockchainHash    String? 
+  blockchainHash    String? @unique // Additional unique constraint for blockchain hash
   blockNumber       Int?
   confirmations     Int      @default(0)
   escrowWallet      String?
@@ -203,8 +205,11 @@ model Transaction {
   @@index([status]) // For filtering by transaction status
   @@index([createdAt]) // For sorting/filtering by creation date
   @@index([propertyId]) // For filtering by property
-  // Consider adding an index on txHash if you often search by transaction hash
-  @@index([txHash])
+  @@index([txHash]) // For searching by transaction hash (redundant with unique but useful for queries)
+  @@index([blockchainHash]) // For searching by blockchain hash
+  @@index([blockNumber]) // For filtering by block number
+  @@index([confirmations]) // For filtering by confirmation count
+  @@unique([buyerId, sellerId, propertyId, amount, createdAt]) // Prevent duplicate transactions between same parties for same property
   @@map("transactions")
 }
 
@@ -419,7 +424,7 @@ model Document {
   type          DocumentType
   status        DocumentStatus @default(PENDING)
   fileUrl       String         @map("file_url")
-  fileHash      String?        @map("file_hash")
+  fileHash      String?        @unique @map("file_hash") // Unique constraint for file hash to prevent duplicate uploads
   mimeType      String?        @map("mime_type")
   fileSize      Int?           @map("file_size")
   description   String?
@@ -440,7 +445,10 @@ model Document {
   @@index([uploadedById])
   @@index([type])
   @@index([status])
+  @@index([fileHash]) // Index for file hash lookups
   @@index([createdAt])
+  @@unique([propertyId, name, fileHash]) // Prevent duplicate documents for same property with same name and hash
+  @@unique([uploadedById, name, fileHash]) // Prevent duplicate uploads by same user with same name and hash
   @@map("documents")
 }
 

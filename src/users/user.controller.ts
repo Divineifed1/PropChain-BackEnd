@@ -22,14 +22,22 @@ import {
 import { UserResponseDto } from './dto/user-response.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserPreferences, PrivacySettings, TransactionMetadata } from '../utils/type-validation.utils';
+import { DuplicateProtectionGuard } from '../common/guards/duplicate-protection.guard';
+import { DuplicateProtection } from '../common/decorators/duplicate-protection.decorator';
 
 @ApiTags('users')
 @Controller({ path: 'users', version: '1' })
 @ApiExtraModels(UserResponseDto)
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Post()
+  @UseGuards(DuplicateProtectionGuard)
+  @DuplicateProtection({
+    validator: 'checkUserDuplicate',
+    fields: ['email', 'walletAddress'],
+    options: { strict: true },
+  })
   @ApiOperation({
     summary: 'Create a new user',
     description: 'Register a new user with email, password, and optional profile fields.',

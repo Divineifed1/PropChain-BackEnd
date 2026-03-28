@@ -4,19 +4,29 @@ import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, DisputeDto } from './dto/create-transaction.dto';
 import { TransactionQueryDto } from './dto/transaction-query.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { DuplicateProtectionGuard } from '../common/guards/duplicate-protection.guard';
+import { DuplicateProtection } from '../common/decorators/duplicate-protection.decorator';
 
 @ApiTags('transactions')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private readonly service: TransactionsService) {}
+  constructor(private readonly service: TransactionsService) { }
 
   @Post()
+  @UseGuards(DuplicateProtectionGuard)
+  @DuplicateProtection({
+    validator: 'checkTransactionDuplicate',
+    fields: ['txHash', 'blockchainHash', 'buyerId', 'sellerId', 'propertyId', 'amount'],
+    options: { strict: true },
+    extractData: (req) => req.body,
+  })
   @ApiOperation({ summary: 'Create a new transaction' })
   @ApiResponse({ status: 201, description: 'Transaction created successfully.', type: CreateTransactionDto })
   @ApiResponse({ status: 400, description: 'Invalid transaction data.' })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
+  @ApiResponse({ status: 409, description: 'Duplicate transaction detected.' })
   create(@Body() dto: CreateTransactionDto) {
     return this.service.createTransaction(dto);
   }
