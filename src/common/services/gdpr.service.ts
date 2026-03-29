@@ -196,33 +196,308 @@ export class GdprService {
    * Get user's consent preferences
    */
   async getUserConsents(userId: string) {
-    // In a real implementation, this would fetch from a consent management system
-    // For now, we'll return a mock implementation
-    return await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        createdAt: true,
-        updatedAt: true,
-        // Add consent-related fields when implemented
-      },
+    const consents = await this.prisma.consent.findMany({
+      where: { userId },
+      orderBy: { grantedAt: 'desc' },
     });
+
+    return consents.map((consent: any) => ({
+      type: consent.consentType as ConsentType,
+      granted: consent.granted,
+      grantedAt: consent.grantedAt,
+      withdrawnAt: consent.withdrawnAt,
+      version: consent.version,
+    }));
   }
 
   /**
-   * Update user's consent preferences
+   * Update user's consent preferences with full audit trail
    */
-  async updateUserConsent(userId: string, consentTypes: string[], granted: boolean) {
-    // In a real implementation, this would update a consent management system
-    // For now, we'll just log the action
+  async updateUserConsent(
+    userId: string,
+    consentTypes: ConsentType[],
+    granted: boolean,
+    metadata?: { ipAddress?: string; userAgent?: string; notes?: string },
+  ): Promise<{ success: boolean; userId: string; consents: any[] }> {
+    this.logger.log(`Updating consent for user ${userId}: ${consentTypes.join(', ')} - ${granted ? 'GRANTED' : 'WITHDRAWN'}`);
+
+    const updatedConsents = await this.prisma.$transaction(async (tx: any) => {
+      const results = [];
+
+      for (const consentType of consentTypes) {
+        const existingConsent = await tx.consent.findUnique({
+          where: {
+            userId_consentType: {
+              userId,
+              consentType,
+            },
+          },
+        });
+
+        if (existingConsent && granted) {
+          // Update existing consent
+          const updated = await tx.consent.update({
+            where: { id: existingConsent.id },
+            data: {
+              granted: true,
+              grantedAt: new Date(),
+              withdrawnAt: null,
+              ipAddress: metadata?.ipAddress,
+              userAgent: metadata?.userAgent,
+              notes: metadata?.notes,
+            },
+          });
+          results.push(updated);
+        } else if (existingConsent && !granted) {
+          // Withdraw consent
+          const updated = await tx.consent.update({
+            where: { id: existingConsent.id },
+            data: {
+              granted: false,
+              withdrawnAt: new Date(),
+              ipAddress: metadata?.ipAddress,
+              userAgent: metadata?.userAgent,
+              notes: metadata?.notes || 'Consent withdrawn',
+            },
+          });
+          results.push(updated);
+        } else if (!existingConsent && granted) {
+          // Create new consent
+          const created = await tx.consent.create({
+            data: {
+              id: uuidv4(),
+              userId,
+              consentType,
+              granted: true,
+              grantedAt: new Date(),
+              ipAddress: metadata?.ipAddress,
+              userAgent: metadata?.userAgent,
+              notes: metadata?.notes || 'Initial consent granted',
+            },
+          });
+          results.push(created);
+        }
+      }
+
+      // Log audit for each consent update
+      for (const consent of results) {
+        await tx.auditLog.create({
+          data: {
+            tableName: 'consents',
+            operation: granted ? AuditOperation.CREATE : AuditOperation.UPDATE,
+            newData: {
+              action: 'CONSENT_UPDATE',
+              userId,
+              consentType: consent.consentType,
+              granted: consent.granted,
+            },
+            userId,
+            timestamp: new Date(),
+          },
+        });
+      }
+
+      return results;
+    });
+
+    this.logger.log(`Consent updated successfully for user ${userId}`);
+
+    return {
+      success: true,
+      userId,
+      consents: updatedConsents.map((c: any) => ({
+        type: c.consentType,
+        granted: c.granted,
+        grantedAt: c.grantedAt,
+        withdrawnAt: c.withdrawnAt,
+        version: c.version,
+      })),
+    };
+  }
+
+  /**
+   * Initiate GDPR request with 30-day deadline tracking
+   */
+  async initiateGdprRequest(
+    userId: string,
+    requestType: GdprRequestType,
+    details?: string,
+    fields?: string[],
+  ): Promise<{ requestId: string; expectedCompletionDate: Date }> {
+    this.logger.log(`Initiating GDPR request for user ${userId}: ${requestType}`);
+
+    const expectedCompletionDate = new Date();
+    expectedCompletionDate.setDate(expectedCompletionDate.getDate() + this.gdprDeadlineDays);
+
+    const gdprRequest = await this.prisma.gdprRequest.create({
+      data: {
+        id: uuidv4(),
+        userId,
+        requestType,
+        status: GdprRequestStatus.PENDING,
+        details,
+        fields: fields || [],
+        expectedCompletionDate,
+        createdAt: new Date(),
+      },
+    });
+
+    // Log audit
     await this.auditService.logAction({
-      tableName: 'consents',
-      operation: granted ? AuditOperation.CREATE : AuditOperation.UPDATE,
-      newData: { userId, consentTypes, granted },
+      tableName: 'gdpr_requests',
+      operation: AuditOperation.CREATE,
+      newData: {
+        action: 'GDPR_REQUEST_INITIATED',
+        userId,
+        requestId: gdprRequest.id,
+        requestType,
+        expectedCompletionDate,
+      },
       userId,
     });
 
-    return { success: true, userId, consentTypes, granted };
+    this.logger.log(`GDPR request created: ${gdprRequest.id}, due by: ${expectedCompletionDate.toISOString()}`);
+
+    return {
+      requestId: gdprRequest.id,
+      expectedCompletionDate,
+    };
+  }
+
+  /**
+   * Complete GDPR request
+   */
+  async completeGdprRequest(requestId: string, resultData?: any): Promise<void> {
+    this.logger.log(`Completing GDPR request: ${requestId}`);
+
+    await this.prisma.gdprRequest.update({
+      where: { id: requestId },
+      data: {
+        status: GdprRequestStatus.COMPLETED,
+        completedAt: new Date(),
+        resultData,
+      },
+    });
+
+    // Log audit
+    const request = await this.prisma.gdprRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (request) {
+      await this.auditService.logAction({
+        tableName: 'gdpr_requests',
+        operation: AuditOperation.UPDATE,
+        newData: {
+          action: 'GDPR_REQUEST_COMPLETED',
+          requestId,
+          completedAt: new Date(),
+        },
+        userId: request.userId,
+      });
+    }
+
+    this.logger.log(`GDPR request completed: ${requestId}`);
+  }
+
+  /**
+   * Fail GDPR request with reason
+   */
+  async failGdprRequest(requestId: string, failureReason: string): Promise<void> {
+    this.logger.error(`Failing GDPR request: ${requestId}, reason: ${failureReason}`);
+
+    await this.prisma.gdprRequest.update({
+      where: { id: requestId },
+      data: {
+        status: GdprRequestStatus.FAILED,
+        failureReason,
+        completedAt: new Date(),
+      },
+    });
+
+    // Log audit
+    const request = await this.prisma.gdprRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (request) {
+      await this.auditService.logAction({
+        tableName: 'gdpr_requests',
+        operation: AuditOperation.UPDATE,
+        newData: {
+          action: 'GDPR_REQUEST_FAILED',
+          requestId,
+          failureReason,
+        },
+        userId: request.userId,
+      });
+    }
+  }
+
+  /**
+   * Get pending GDPR requests approaching deadline
+   */
+  async getUrgentGdprRequests(daysUntilDeadline: number = 7): Promise<any[]> {
+    const deadlineDate = new Date();
+    deadlineDate.setDate(deadlineDate.getDate() + daysUntilDeadline);
+
+    const urgentRequests = await this.prisma.gdprRequest.findMany({
+      where: {
+        status: GdprRequestStatus.IN_PROGRESS,
+        expectedCompletionDate: {
+          lte: deadlineDate,
+        },
+      },
+      include: {
+        user: {
+          select: {
+            email: true,
+            id: true,
+          },
+        },
+      },
+      orderBy: {
+        expectedCompletionDate: 'asc',
+      },
+    });
+
+    this.logger.warn(`Found ${urgentRequests.length} urgent GDPR requests approaching deadline`);
+
+    return urgentRequests;
+  }
+
+  /**
+   * Get GDPR request statistics
+   */
+  async getGdprRequestStats(): Promise<{
+    total: number;
+    pending: number;
+    inProgress: number;
+    completed: number;
+    failed: number;
+    overdue: number;
+  }> {
+    const [total, pending, inProgress, completed, failed] = await Promise.all([
+      this.prisma.gdprRequest.count(),
+      this.prisma.gdprRequest.count({ where: { status: GdprRequestStatus.PENDING } }),
+      this.prisma.gdprRequest.count({ where: { status: GdprRequestStatus.IN_PROGRESS } }),
+      this.prisma.gdprRequest.count({ where: { status: GdprRequestStatus.COMPLETED } }),
+      this.prisma.gdprRequest.count({ where: { status: GdprRequestStatus.FAILED } }),
+    ]);
+
+    const now = new Date();
+    const overdue = await this.prisma.gdprRequest.count({
+      where: {
+        status: {
+          in: [GdprRequestStatus.PENDING, GdprRequestStatus.IN_PROGRESS],
+        },
+        expectedCompletionDate: {
+          lt: now,
+        },
+      },
+    });
+
+    return { total, pending, inProgress, completed, failed, overdue };
   }
 
   /**
