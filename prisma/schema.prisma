@@ -79,6 +79,12 @@ model User {
   avatar        String?
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+  preferredChannel String?  @map("preferred_channel")
+  languagePreference String? @map("language_preference")
+  timezone String? @map("timezone")
+  contactHours Json? @map("contact_hours")
+  referralCode String? @unique @map("referral_code")
+  referredById String? @map("referred_by_id")
 
   // Relations
   properties    Property[]
@@ -89,11 +95,15 @@ model User {
   passwordHistory PasswordHistory[]
   blacklistedTokens BlacklistedToken[]
   passwordResetTokens PasswordResetToken[]
+  loginHistory  LoginHistory[]
+  referrals     User[] @relation("Referrals")
+  referredBy    User?  @relation("Referrals", fields: [referredById], references: [id])
 
   @@index([email])
   @@index([role])
   @@index([isDeactivated])
   @@index([scheduledDeletionAt])
+  @@index([referralCode])
   @@map("users")
 }
 
@@ -174,6 +184,20 @@ model LoginAttempt {
   @@index([email, lockedOut])
   @@index([unlockAt])
   @@map("login_attempts")
+}
+
+// Successful login history
+model LoginHistory {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  timestamp DateTime @default(now())
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, timestamp])
+  @@map("login_history")
 }
 
 // Property model

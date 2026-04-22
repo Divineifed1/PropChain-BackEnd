@@ -190,6 +190,7 @@ export class AuthService {
 
     // Record successful login
     await this.rateLimitService.recordSuccessfulAttempt(data.email, ipAddress, userAgent);
+    await this.recordLoginHistory(user.id, ipAddress, userAgent);
 
     const tokens = await this.issueTokenPair(user);
     return {
@@ -289,69 +290,70 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    const [properties, buyerTransactions, sellerTransactions, documents, apiKeys] = await Promise.all([
-      this.prisma.property.findMany({
-        where: { ownerId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        take: 10,
-      }),
-      this.prisma.transaction.findMany({
-        where: { buyerId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: {
-          property: {
-            select: {
-              id: true,
-              title: true,
-              address: true,
-              city: true,
-              state: true,
-              price: true,
+    const [properties, buyerTransactions, sellerTransactions, documents, apiKeys] =
+      await Promise.all([
+        this.prisma.property.findMany({
+          where: { ownerId: user.sub },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+        this.prisma.transaction.findMany({
+          where: { buyerId: user.sub },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            property: {
+              select: {
+                id: true,
+                title: true,
+                address: true,
+                city: true,
+                state: true,
+                price: true,
+              },
+            },
+            seller: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
             },
           },
-          seller: {
-            select: {
-              firstName: true,
-              lastName: true,
+        }),
+        this.prisma.transaction.findMany({
+          where: { sellerId: user.sub },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: {
+            property: {
+              select: {
+                id: true,
+                title: true,
+                address: true,
+                city: true,
+                state: true,
+                price: true,
+              },
+            },
+            buyer: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
             },
           },
-        },
-      }),
-      this.prisma.transaction.findMany({
-        where: { sellerId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-        include: {
-          property: {
-            select: {
-              id: true,
-              title: true,
-              address: true,
-              city: true,
-              state: true,
-              price: true,
-            },
-          },
-          buyer: {
-            select: {
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-      }),
-      this.prisma.document.findMany({
-        where: { userId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        take: 5,
-      }),
-      this.prisma.apiKey.findMany({
-        where: { userId: user.sub },
-        orderBy: { createdAt: 'desc' },
-        take: 3,
-      }),
-    ]);
+        }),
+        this.prisma.document.findMany({
+          where: { userId: user.sub },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        }),
+        this.prisma.apiKey.findMany({
+          where: { userId: user.sub },
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+        }),
+      ]);
 
     const [
       totalProperties,
@@ -964,5 +966,15 @@ export class AuthService {
       remainingLockoutMinutes: lockoutInfo.remainingLockoutMinutes,
       canAttemptLogin: !lockoutInfo.isLocked,
     };
+  }
+
+  private async recordLoginHistory(userId: string, ipAddress?: string, userAgent?: string) {
+    await this.prisma.loginHistory.create({
+      data: {
+        userId,
+        ipAddress,
+        userAgent,
+      },
+    });
   }
 }

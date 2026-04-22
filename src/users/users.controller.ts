@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, Put, Delete, UseGuards } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto } from './dto/user.dto';
 import { DeactivateAccountDto, ReactivateAccountDto } from './dto/deactivation.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -90,6 +90,20 @@ export class UsersController {
   // Admin endpoints for deactivation management
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @Post(':id/verify')
+  verifyUser(@Param('id') id: string) {
+    return this.usersService.verify(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @Post(':id/unverify')
+  unverifyUser(@Param('id') id: string) {
+    return this.usersService.unverify(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post(':id/deactivate')
   adminDeactivateAccount(@Param('id') id: string, @Body() deactivateDto: DeactivateAccountDto) {
     return this.usersService.deactivate(id, deactivateDto);
@@ -100,6 +114,35 @@ export class UsersController {
   @Post(':id/reactivate')
   adminReactivateAccount(@Param('id') id: string, @Body() reactivateDto: ReactivateAccountDto) {
     return this.usersService.reactivate(id, reactivateDto);
+  }
+
+  // User self-service preferences update
+  @UseGuards(JwtAuthGuard)
+  @Put('me/preferences')
+  updatePreferences(
+    @CurrentUser() user: AuthUserPayload,
+    @Body() updatePreferencesDto: UpdatePreferencesDto,
+  ) {
+    return this.usersService.updatePreferences(user.sub, updatePreferencesDto);
+  }
+
+  // Referral system
+  @UseGuards(JwtAuthGuard)
+  @Get('me/referral-stats')
+  getReferralStats(@CurrentUser() user: AuthUserPayload) {
+    return this.usersService.getReferralStats(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/referrals')
+  getMyReferrals(@CurrentUser() user: AuthUserPayload) {
+    return this.usersService.getMyReferrals(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me/login-history')
+  getLoginHistory(@CurrentUser() user: AuthUserPayload) {
+    return this.usersService.getLoginHistory(user.sub);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

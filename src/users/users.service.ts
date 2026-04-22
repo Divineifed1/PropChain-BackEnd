@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, UpdatePreferencesDto } from './dto/user.dto';
 import { DeactivateAccountDto, ReactivateAccountDto } from './dto/deactivation.dto';
 import { hashPassword, sanitizeUser } from '../auth/security.utils';
 
@@ -13,6 +13,23 @@ export class UsersService {
   async create(data: CreateUserDto) {
     const passwordHash = await hashPassword(data.password);
 
+    // Generate unique referral code
+    let referralCode: string;
+    do {
+      referralCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    } while (await this.prisma.user.findUnique({ where: { referralCode } }));
+
+    // Handle referral
+    let referredById: string | null = null;
+    if (data.referralCode) {
+      const referrer = await this.prisma.user.findUnique({
+        where: { referralCode: data.referralCode },
+      });
+      if (referrer) {
+        referredById = referrer.id;
+      }
+    }
+
     const user = await this.prisma.user.create({
       data: {
         email: data.email,
@@ -20,6 +37,12 @@ export class UsersService {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
+        preferredChannel: data.preferredChannel,
+        languagePreference: data.languagePreference,
+        timezone: data.timezone,
+        contactHours: data.contactHours,
+        referralCode,
+        referredById,
         passwordHistory: {
           create: {
             passwordHash,
@@ -63,6 +86,10 @@ export class UsersService {
         role: true,
         isVerified: true,
         avatar: true,
+        preferredChannel: true,
+        languagePreference: true,
+        timezone: true,
+        contactHours: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -90,6 +117,25 @@ export class UsersService {
         role: true,
         isVerified: true,
         avatar: true,
+        preferredChannel: true,
+        languagePreference: true,
+        timezone: true,
+        contactHours: true,
+        updatedAt: true,
+      },
+    });
+  }
+
+  async updatePreferences(id: string, data: UpdatePreferencesDto) {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        preferredChannel: true,
+        languagePreference: true,
+        timezone: true,
+        contactHours: true,
         updatedAt: true,
       },
     });
@@ -308,5 +354,68 @@ export class UsersService {
     this.logger.log(`Deleted ${result.count} deactivated users`);
 
     return { deletedCount: result.count };
+  }
+
+  async getReferralStats(userId: string) {
+    const referralCount = await this.prisma.user.count({
+      where: { referredById: userId },
+    });
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralCode: true },
+    });
+
+    return {
+      referralCode: user?.referralCode,
+      referralCount,
+    };
+  }
+
+  async getMyReferrals(userId: string) {
+    return this.prisma.user.findMany({
+      where: { referredById: userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  async getLoginHistory(userId: string) {
+    return this.prisma.loginHistory.findMany({
+      where: { userId },
+      orderBy: { timestamp: 'desc' },
+      select: {
+        timestamp: true,
+        ipAddress: true,
+        userAgent: true,
+      },
+    });
+  }
+
+  async verify(id: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isVerified: true },
+      select: {
+        id: true,
+        isVerified: true,
+      },
+    });
+  }
+
+  async unverify(id: string) {
+    return this.prisma.user.update({
+      where: { id },
+      data: { isVerified: false },
+      select: {
+        id: true,
+        isVerified: true,
+      },
+    });
   }
 }

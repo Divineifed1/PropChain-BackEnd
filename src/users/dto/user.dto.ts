@@ -1,4 +1,25 @@
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, MinLength, IsIn, IsObject } from 'class-validator';
+
+export class UpdatePreferencesDto {
+  @IsOptional()
+  @IsIn(['email', 'sms', 'phone'])
+  preferredChannel?: string;
+
+  @IsOptional()
+  @IsString()
+  languagePreference?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsObject()
+  contactHours?: {
+    start: string;
+    end: string;
+  };
+}
 
 export class CreateUserDto {
   @IsEmail()
@@ -17,6 +38,29 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   phone?: string;
+
+  @IsOptional()
+  @IsIn(['email', 'sms', 'phone'])
+  preferredChannel?: string;
+
+  @IsOptional()
+  @IsString()
+  languagePreference?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsObject()
+  contactHours?: {
+    start: string;
+    end: string;
+  };
+
+  @IsOptional()
+  @IsString()
+  referralCode?: string;
 }
 
 export class UpdateUserDto {
@@ -37,6 +81,21 @@ export class UpdateUserDto {
   phone?: string;
 
   @IsOptional()
+  @IsIn(['email', 'sms', 'phone'])
+  preferredChannel?: string;
+
+  @IsOptional()
   @IsString()
-  avatar?: string;
+  languagePreference?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsObject()
+  contactHours?: {
+    start: string;
+    end: string;
+  };
 }
