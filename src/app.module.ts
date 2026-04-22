@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 import { PropertiesModule } from './properties/properties.module';
 import { PrismaModule } from './database/prisma.module';
 import { AppController } from './app.controller';
-import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -14,8 +14,8 @@ import { AuthModule } from './auth/auth.module';
     }),
     PrismaModule,
     UsersModule,
-    PropertiesModule,
     AuthModule,
+    PropertiesModule,
   ],
   controllers: [AppController],
 })
