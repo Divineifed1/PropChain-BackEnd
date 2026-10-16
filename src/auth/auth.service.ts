@@ -1,12 +1,12 @@
 import {
   BadRequestException,
   Injectable,
-  Logger,
   NotFoundException,
   Optional,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AppLogger } from '../common/logger';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, BlacklistedToken, Document, ApiKey, PasswordHistory } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -85,7 +85,7 @@ interface RecaptchaVerifyResponse {
 
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
+  private readonly logger = new AppLogger(AuthService.name);
   private readonly issuer = 'PropChain';
 
   private readonly registrationIpMap = new Map<string, { email: string; expiresAt: Date }>();
@@ -354,9 +354,12 @@ export class AuthService {
       if (shouldLock) {
         const lockoutDuration = 30;
         await this.emailService.sendAccountLockedEmail(user.email, lockoutDuration).catch((err) => {
-          this.logger.error(
-            `Failed to send account locked email to user ${user.id} (${this.hashEmail(user.email)}): ${err.message}`,
-          );
+          this.logger.error('Failed to send account locked email', {
+            event: 'auth.lockout_email_failed',
+            userId: user.id,
+            emailHash: this.hashEmail(user.email),
+            error: err.message,
+          });
         });
         throw new UnauthorizedException(
           `Account locked due to too many failed login attempts. Please try again in ${lockoutDuration} minutes.`,
@@ -515,9 +518,13 @@ export class AuthService {
       await this.handleTokenReuse(blacklistedToken, payload.jti, ipAddress, userAgent);
       await this.fraudService.handleTokenReuse(payload.sub, payload.jti, ipAddress, userAgent);
 
-      this.logger.error(
-        `Refresh token reuse detected for user ${payload.sub} (JTI: ${payload.jti}, Family: ${payload.family}). IP: ${ipAddress}`,
-      );
+      this.logger.error('Refresh token reuse detected', {
+        event: 'auth.refresh_token_reuse',
+        userId: payload.sub,
+        jti: payload.jti,
+        family: payload.family,
+        ipAddress,
+      });
 
       throw new UnauthorizedException(
         'Token reuse detected. All sessions have been invalidated for security. Please login again.',
@@ -553,9 +560,13 @@ export class AuthService {
     // Issue new token pair with SAME family ID
     const tokens = await this.issueTokenPair(user, payload.family, ipAddress, userAgent);
 
-    this.logger.log(
-      `Token rotated for user ${user.id} (${this.hashEmail(user.email)}). Family: ${payload.family}. IP: ${ipAddress}`,
-    );
+    this.logger.log('Refresh token rotated', {
+      event: 'auth.token_rotated',
+      userId: user.id,
+      emailHash: this.hashEmail(user.email),
+      family: payload.family,
+      ipAddress,
+    });
 
     return {
       user: sanitizeUser(user),
@@ -619,9 +630,11 @@ export class AuthService {
         });
       } catch (error: unknown) {
         // Token might already be expired or invalid, continue with logout
-        this.logger.warn(
-          `Failed to blacklist access token for user ${user.sub}: ${(error as Error).message}`,
-        );
+        this.logger.warn('Failed to blacklist access token', {
+          event: 'auth.blacklist_access_token_failed',
+          userId: user.sub,
+          error: (error as Error).message,
+        });
       }
     }
 
@@ -645,16 +658,21 @@ export class AuthService {
           throw error;
         }
         // Token might already be expired or invalid, continue with logout
-        this.logger.warn(
-          `Failed to blacklist refresh token for user ${user.sub}: ${(error as Error).message}`,
-        );
+        this.logger.warn('Failed to blacklist refresh token', {
+          event: 'auth.blacklist_refresh_token_failed',
+          userId: user.sub,
+          error: (error as Error).message,
+        });
       }
     }
 
     // Log the logout event
-    this.logger.log(
-      `User ${user.sub} (${this.hashEmail(user.email)}) logged out successfully at ${logoutTime.toISOString()}`,
-    );
+    this.logger.log('User logged out', {
+      event: 'auth.logout',
+      userId: user.sub,
+      emailHash: this.hashEmail(user.email),
+      loggedOutAt: logoutTime.toISOString(),
+    });
 
     return {
       message: 'Logged out successfully',
@@ -1671,8 +1689,18 @@ export class AuthService {
       },
     });
 
-    // Send reset email with raw token (not the hash)
-    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    // Send reset email with raw token (not the hash). A mail failure must not change
+    // the response: a 500 here would reveal that the address belongs to an account.
+    try {
+      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    } catch (err) {
+      this.logger.error('Failed to send password reset email', {
+        event: 'auth.password_reset_email_failed',
+        userId: user.id,
+        emailHash: this.hashEmail(user.email),
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   async resetPassword(data: ResetPasswordDto): Promise<void> {
@@ -1847,10 +1875,16 @@ export class AuthService {
         return true;
       }
 
-      this.logger.warn(`CAPTCHA verification failed: ${JSON.stringify(data['error-codes'])}`);
+      this.logger.warn('CAPTCHA verification failed', {
+        event: 'auth.captcha_failed',
+        errorCodes: data['error-codes'] ?? [],
+      });
       return false;
     } catch (error: unknown) {
-      this.logger.error(`Error verifying CAPTCHA: ${(error as Error).message}`);
+      this.logger.error('Error verifying CAPTCHA', {
+        event: 'auth.captcha_error',
+        error: (error as Error).message,
+      });
       return false;
     }
   }
@@ -1951,6 +1985,6 @@ export class AuthService {
         this.logger.error('Failed to queue verification email:', err?.message || err);
       });
 
-    this.logger.log(`Verification email resent for user ${user.id}`);
+    this.logger.log('Verification email resent', { event: 'auth.verification_resent', userId: user.id });
   }
 }
