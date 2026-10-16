@@ -18,6 +18,8 @@ import { DataExportService } from './data-export.service';
 import { I18nModule } from '../i18n/i18n.module';
 import { UserImportController } from './user-import.controller';
 import { UserImportService } from './user-import.service';
+import { UsersCacheService } from './users-cache.service';
+import { UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard';
 
 @Module({
   imports: [PrismaModule, SessionsModule, I18nModule],
@@ -31,6 +33,8 @@ import { UserImportService } from './user-import.service';
   ],
   providers: [
     UsersService,
+    UsersCacheService,
+    UsersRouteRateLimitGuard,
     UserPreferencesService,
     ActivityLogService,
     EmailVerificationService,

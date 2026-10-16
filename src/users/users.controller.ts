@@ -16,6 +16,7 @@ import {
   Res,
   StreamableFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as crypto from 'crypto';
@@ -30,6 +31,8 @@ import { UserRole } from '../types/prisma.types';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ActivityLogService } from './activity-log.service';
+import { UsersMetricsInterceptor } from './interceptors/users-metrics.interceptor';
+import { UsersRouteLimit, UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard';
 import {
   CreateUserDto,
   SearchUsersDto,
@@ -50,6 +53,7 @@ const REACTIVATE_WINDOW_MS = 60 * 60 * 1000;
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
+@UseInterceptors(UsersMetricsInterceptor)
 @Controller('users')
 export class UsersController {
   private readonly downloadRateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -122,7 +126,8 @@ export class UsersController {
 
   // ─── Admin Endpoints ─────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
@@ -136,14 +141,16 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 60, windowMs: 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Get('search')
   search(@Query() query: SearchUsersDto) {
     return this.usersService.search(query);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/statistics')
   getStatistics(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getUserStatistics(user.sub);
@@ -387,7 +394,8 @@ export class UsersController {
     return this.usersService.getMyReferrals(user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/login-history')
   getLoginHistory(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getLoginHistory(user.sub);
