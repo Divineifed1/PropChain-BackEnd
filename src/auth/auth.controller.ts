@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { ApiKeyAnalyticsService } from './api-key-analytics.service';
 import {
@@ -39,6 +39,10 @@ export class AuthController {
     private readonly apiKeyAnalyticsService: ApiKeyAnalyticsService,
   ) {}
 
+  @ApiOperation({ summary: 'Register a new account' })
+  @ApiResponse({ status: 201, description: 'Account created; verification email sent' })
+  @ApiResponse({ status: 400, description: 'Validation failed or email already registered' })
+  @ApiResponse({ status: 429, description: 'Too many registration attempts' })
   @Post('register')
   register(@Body() registerDto: RegisterDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -57,6 +61,11 @@ export class AuthController {
     return this.authService.googleOAuthLogin(req.user);
   }
 
+  @ApiOperation({ summary: 'Log in with email and password' })
+  @ApiResponse({ status: 201, description: 'Access and refresh tokens (or a 2FA challenge)' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials or locked account' })
+  @ApiResponse({ status: 429, description: 'Too many attempts' })
   @Post('login')
   login(@Body() loginDto: LoginDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -64,6 +73,9 @@ export class AuthController {
     return this.authService.login(loginDto, ipAddress, userAgent);
   }
 
+  @ApiOperation({ summary: 'Exchange a refresh token for a new token pair' })
+  @ApiResponse({ status: 201, description: 'New access and refresh tokens' })
+  @ApiResponse({ status: 401, description: 'Refresh token invalid, expired or reused' })
   @Post('refresh')
   refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -73,6 +85,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out the current session' })
+  @ApiResponse({ status: 201, description: 'Tokens revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout')
   logout(
     @CurrentUser() user: AuthUserPayload,
@@ -84,6 +99,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out of every device' })
+  @ApiResponse({ status: 201, description: 'All sessions revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout-all')
   logoutAllDevices(@CurrentUser() user: AuthUserPayload, @Req() request: { accessToken?: string }) {
     return this.authService.logoutAllDevices(user, request.accessToken);
@@ -91,6 +109,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the authenticated user's profile' })
+  @ApiResponse({ status: 200, description: 'Sanitised user profile' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get('me')
   me(@CurrentUser() user: AuthUserPayload) {
     return this.authService.me(user);
@@ -98,6 +120,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, FreshTwoFactorGuard)
+  @ApiOperation({ summary: 'Change the account password' })
+  @ApiResponse({ status: 201, description: 'Password updated; other sessions revoked' })
+  @ApiResponse({ status: 400, description: 'Weak or recently used password' })
+  @ApiResponse({ status: 401, description: 'Current password incorrect' })
   @Post('change-password')
   changePassword(
     @CurrentUser() user: AuthUserPayload,
@@ -223,11 +249,17 @@ export class AuthController {
     return this.apiKeyAnalyticsService.getUsageAnalytics(id, user.sub);
   }
 
+  @ApiOperation({ summary: 'Request a password reset email' })
+  @ApiResponse({ status: 201, description: 'Request accepted (response does not reveal whether the email exists)' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
   @Post('password-reset/request')
   requestPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
     return this.authService.requestPasswordReset(requestPasswordResetDto);
   }
 
+  @ApiOperation({ summary: 'Reset the password with an emailed token' })
+  @ApiResponse({ status: 201, description: 'Password reset' })
+  @ApiResponse({ status: 400, description: 'Invalid, used or expired token, or weak password' })
   @Post('password-reset/reset')
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
@@ -246,6 +278,9 @@ export class AuthController {
     return this.authService.getLoginStatus(data.email);
   }
 
+  @ApiOperation({ summary: 'Verify an email address with the emailed token' })
+  @ApiResponse({ status: 201, description: 'Email verified and tokens issued' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   @Post('verify-email')
   verifyEmail(@Body() verifyEmailDto: VerifyEmailDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;

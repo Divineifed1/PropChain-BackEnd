@@ -7,8 +7,9 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { TransientError, retryWithBackoff } from './retry.util';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, BlacklistedToken, Document, ApiKey, PasswordHistory } from '@prisma/client';
+import { Prisma, BlacklistedToken, Document, ApiKey } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../database/prisma.service';
@@ -890,6 +891,51 @@ export class AuthService {
     };
   }
 
+  /** Throws a 400 listing every complexity rule the password breaks. */
+  private assertPasswordMeetsPolicy(newPassword: string): void {
+    const passwordErrors = validatePassword(newPassword, this.configService);
+    if (passwordErrors.length > 0) {
+      throw new BadRequestException(
+        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
+      );
+    }
+  }
+
+  /** Throws a 400 if `newPassword` matches any of the recent password hashes. */
+  private async assertPasswordNotReused(
+    newPassword: string,
+    recentHashes: string[],
+    historyLimit: number,
+  ): Promise<void> {
+    const reused = await Promise.all(recentHashes.map((hash) => comparePassword(newPassword, hash)));
+    if (reused.some(Boolean)) {
+      throw new BadRequestException(
+        `Password reuse is not allowed for the last ${historyLimit} passwords`,
+      );
+    }
+  }
+
+  /** Stores the new hash and deletes history entries beyond the retention limit. */
+  private async recordPasswordHistory(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    passwordHash: string,
+    historyLimit: number,
+  ): Promise<void> {
+    await tx.passwordHistory.create({ data: { userId, passwordHash } });
+
+    const expired = await tx.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip: historyLimit,
+    });
+    if (expired.length > 0) {
+      await tx.passwordHistory.deleteMany({
+        where: { id: { in: expired.map((entry: { id: string }) => entry.id) } },
+      });
+    }
+  }
+
   async changePassword(user: AuthUserPayload, data: ChangePasswordDto) {
     const passwordHistoryLimit = this.getPasswordHistoryLimit();
     const existingUser = await this.prisma.user.findUnique({
@@ -913,26 +959,14 @@ export class AuthService {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    const passwordErrors = validatePassword(data.newPassword, this.configService);
-    if (passwordErrors.length > 0) {
-      throw new BadRequestException(
-        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
-      );
-    }
-
-    const passwordReused = await Promise.all(
+    this.assertPasswordMeetsPolicy(data.newPassword);
+    await this.assertPasswordNotReused(
+      data.newPassword,
       existingUser.passwordHistory
         .slice(0, passwordHistoryLimit)
-        .map((entry: { passwordHash: string }) =>
-          comparePassword(data.newPassword, entry.passwordHash),
-        ),
+        .map((entry: { passwordHash: string }) => entry.passwordHash),
+      passwordHistoryLimit,
     );
-
-    if (passwordReused.some(Boolean)) {
-      throw new BadRequestException(
-        `Password reuse is not allowed for the last ${passwordHistoryLimit} passwords`,
-      );
-    }
 
     const newPasswordHash = await hashPassword(data.newPassword, this.bcryptRounds);
 
@@ -944,28 +978,7 @@ export class AuthService {
         },
       });
 
-      await tx.passwordHistory.create({
-        data: {
-          userId: existingUser.id,
-          passwordHash: newPasswordHash,
-        },
-      });
-
-      const historyEntries = await tx.passwordHistory.findMany({
-        where: { userId: existingUser.id },
-        orderBy: { createdAt: 'desc' },
-        skip: passwordHistoryLimit,
-      });
-
-      if (historyEntries.length > 0) {
-        await tx.passwordHistory.deleteMany({
-          where: {
-            id: {
-              in: historyEntries.map((entry: { id: string }) => entry.id),
-            },
-          },
-        });
-      }
+      await this.recordPasswordHistory(tx, existingUser.id, newPasswordHash, passwordHistoryLimit);
     });
 
     // Audit log password change (#886)
@@ -1672,7 +1685,12 @@ export class AuthService {
     });
 
     // Send reset email with raw token (not the hash)
-    await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    // Retried with backoff: a transient mail-provider failure should not lose the reset email.
+    await retryWithBackoff(() => this.emailService.sendPasswordResetEmail(user.email, resetToken), {
+      attempts: 3,
+      baseDelayMs: 300,
+      maxDelayMs: 2_000,
+    });
   }
 
   async resetPassword(data: ResetPasswordDto): Promise<void> {
@@ -1700,12 +1718,7 @@ export class AuthService {
 
     const passwordHistoryLimit = this.getPasswordHistoryLimit();
 
-    const passwordErrors = validatePassword(data.newPassword, this.configService);
-    if (passwordErrors.length > 0) {
-      throw new BadRequestException(
-        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
-      );
-    }
+    this.assertPasswordMeetsPolicy(data.newPassword);
 
     // Check if new password was used recently
     const recentPasswords = await this.prisma.passwordHistory.findMany({
@@ -1713,15 +1726,11 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
       take: passwordHistoryLimit,
     });
-
-    const reuseResults = await Promise.all(
-      recentPasswords.map((entry) => comparePassword(data.newPassword, entry.passwordHash)),
+    await this.assertPasswordNotReused(
+      data.newPassword,
+      recentPasswords.map((entry) => entry.passwordHash),
+      passwordHistoryLimit,
     );
-    if (reuseResults.some(Boolean)) {
-      throw new BadRequestException(
-        `Password reuse is not allowed for the last ${passwordHistoryLimit} passwords`,
-      );
-    }
 
     const newPasswordHash = await hashPassword(data.newPassword, this.bcryptRounds);
 
@@ -1737,27 +1746,7 @@ export class AuthService {
         data: { usedAt: new Date() },
       });
 
-      await tx.passwordHistory.create({
-        data: {
-          userId: resetToken.userId,
-          passwordHash: newPasswordHash,
-        },
-      });
-
-      // Clean up old password history entries
-      const historyEntries = await tx.passwordHistory.findMany({
-        where: { userId: resetToken.userId },
-        orderBy: { createdAt: 'desc' },
-        skip: passwordHistoryLimit,
-      });
-
-      if (historyEntries.length > 0) {
-        await tx.passwordHistory.deleteMany({
-          where: {
-            id: { in: historyEntries.map((entry: PasswordHistory) => entry.id) },
-          },
-        });
-      }
+      await this.recordPasswordHistory(tx, resetToken.userId, newPasswordHash, passwordHistoryLimit);
     });
 
     await this.sessionsService.revokeAllSessions(resetToken.userId);
@@ -1827,13 +1816,23 @@ export class AuthService {
     }
 
     try {
-      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+      // Retried with backoff on network errors, 429 and 5xx; other responses are final.
+      const response = await retryWithBackoff(
+        async () => {
+          const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `secret=${secret}&response=${token}`,
+          });
+          if (res.status === 429 || res.status >= 500) {
+            throw new TransientError(`reCAPTCHA responded ${res.status}`);
+          }
+          return res;
         },
-        body: `secret=${secret}&response=${token}`,
-      });
+        { attempts: 3, baseDelayMs: 200, maxDelayMs: 1_500 },
+      );
 
       const data = (await response.json()) as RecaptchaVerifyResponse;
 
