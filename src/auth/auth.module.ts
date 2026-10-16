@@ -20,12 +20,16 @@ import { RateLimitGuard } from './guards/rate-limit.guard';
 import { RateLimitHeadersInterceptor } from './interceptors/rate-limit-headers.interceptor';
 import { RateLimitAdminController } from './controllers/rate-limit-admin.controller';
 import { FraudModule } from '../fraud/fraud.module';
+import { AuthCacheService } from './auth-cache.service';
+import { AuthRouteRateLimitGuard } from './guards/auth-route-rate-limit.guard';
 
 @Module({
   imports: [PrismaModule, UsersModule, SessionsModule, EmailModule, FraudModule, PassportModule],
   controllers: [AuthController, RateLimitAdminController],
   providers: [
     AuthService,
+    AuthCacheService,
+    AuthRouteRateLimitGuard,
     ApiKeyAnalyticsService,
     LoginRateLimitService,
     RateLimitService,

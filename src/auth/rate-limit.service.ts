@@ -84,6 +84,20 @@ export class RateLimitService {
   /**
    * Generic rate limit check
    */
+  /**
+   * Fixed-window limit for an arbitrary scope and identifier (for example
+   * `auth-route:POST /auth/register` per client). Unlike the endpoint limit,
+   * which is one bucket shared by everyone, this counts each identifier separately.
+   */
+  async checkScopedRateLimit(
+    scope: string,
+    identifier: string,
+    max: number,
+    windowMs: number,
+  ): Promise<RateLimitStatus> {
+    return this.checkRateLimit(`rate-limit:scope:${scope}:${identifier}`, max, windowMs);
+  }
+
   private async checkRateLimit(
     key: string,
     limit: number,
