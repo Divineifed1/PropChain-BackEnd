@@ -27,7 +27,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthUserPayload } from '../auth/types/auth-user.type';
 import { UserRole } from '../types/prisma.types';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ActivityLogService } from './activity-log.service';
 import {
@@ -124,6 +124,11 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Create a user (admin)' })
+  @ApiResponse({ status: 201, description: 'User created' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
   @Post()
   create(@Body() createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
@@ -131,6 +136,10 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'List active users (admin)' })
+  @ApiResponse({ status: 200, description: 'Array of users, or { data, meta } when page/limit are given' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
   @Get()
   findAll() {
     return this.usersService.findAll();
@@ -138,12 +147,21 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Search users (admin)' })
+  @ApiResponse({ status: 200, description: '{ data, meta } page of matching users' })
+  @ApiResponse({ status: 400, description: 'Invalid query' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
   @Get('search')
   search(@Query() query: SearchUsersDto) {
     return this.usersService.search(query);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the caller's activity statistics' })
+  @ApiResponse({ status: 200, description: 'Property and transaction counts, account age' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get('me/statistics')
   getStatistics(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getUserStatistics(user.sub);
@@ -151,6 +169,11 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Get a user by id (admin)' })
+  @ApiResponse({ status: 200, description: 'The user' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
@@ -158,6 +181,12 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update a user (admin)' })
+  @ApiResponse({ status: 200, description: 'The updated user' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 403, description: 'Admin role required' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Put(':id')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
@@ -187,12 +216,20 @@ export class UsersController {
   // ─── Profile Management (#306) ───────────────────────────────────
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the caller's profile' })
+  @ApiResponse({ status: 200, description: 'Profile with statistics' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get('me/profile')
   getProfile(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getProfile(user.sub);
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update the caller's profile' })
+  @ApiResponse({ status: 200, description: 'The updated profile' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Put('me/profile')
   updateProfile(@CurrentUser() user: AuthUserPayload, @Body() updateProfileDto: UpdateProfileDto) {
     return this.usersService.updateProfile(user.sub, updateProfileDto);
@@ -388,6 +425,9 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the caller's recent logins' })
+  @ApiResponse({ status: 200, description: 'Login history entries, newest first' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Get('me/login-history')
   getLoginHistory(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getLoginHistory(user.sub);

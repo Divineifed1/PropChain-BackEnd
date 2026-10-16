@@ -9,7 +9,8 @@ import {
   IsInt,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { CleanText, TrimIdentifier } from '../sanitize.util';
 import { InputType, Field } from '@nestjs/graphql';
 
 export class UpdatePreferencesDto {
@@ -34,6 +35,7 @@ export class UpdatePreferencesDto {
 }
 
 export class CreateUserDto {
+  @Transform(TrimIdentifier)
   @IsEmail()
   email: string;
 
@@ -41,9 +43,11 @@ export class CreateUserDto {
   @MinLength(8)
   password: string;
 
+  @Transform(CleanText)
   @IsString()
   firstName: string;
 
+  @Transform(CleanText)
   @IsString()
   lastName: string;
 
@@ -78,16 +82,19 @@ export class CreateUserDto {
 @InputType()
 export class UpdateUserDto {
   @Field({ nullable: true })
+  @Transform(TrimIdentifier)
   @IsOptional()
   @IsEmail()
   email?: string;
 
   @Field({ nullable: true })
+  @Transform(CleanText)
   @IsOptional()
   @IsString()
   firstName?: string;
 
   @Field({ nullable: true })
+  @Transform(CleanText)
   @IsOptional()
   @IsString()
   lastName?: string;
@@ -113,14 +120,17 @@ export class UpdateUserDto {
   timezone?: string;
 }
 export class SearchUsersDto {
+  @Transform(CleanText)
   @IsOptional()
   @IsString()
   q?: string;
 
+  @Transform(TrimIdentifier)
   @IsOptional()
   @IsString()
   email?: string;
 
+  @Transform(CleanText)
   @IsOptional()
   @IsString()
   name?: string;

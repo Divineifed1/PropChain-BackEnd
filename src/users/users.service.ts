@@ -670,79 +670,45 @@ export class UsersService implements OnModuleInit {
     });
   }
 
-  async search(filters: SearchUsersDto) {
-    const { q, email, name, page = 1, limit = 10 } = filters;
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.UserWhereInput = {
-      isDeactivated: false,
-    };
+  /**
+   * Builds the Prisma filter for the admin user search: active users only, with
+   * a free-text match over email and names (`q`), a partial email match, and a
+   * name match ("First Last" matches both parts, a single word matches either).
+   */
+  private buildSearchWhere(filters: { q?: string; email?: string; name?: string }): Prisma.UserWhereInput {
+    const { q, email, name } = filters;
+    const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
+    const where: Prisma.UserWhereInput = { isDeactivated: false };
 
     if (q) {
-      where.OR = [
-        {
-          email: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-        {
-          firstName: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-        {
-          lastName: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-      ];
+      where.OR = [{ email: contains(q) }, { firstName: contains(q) }, { lastName: contains(q) }];
     }
 
     if (email) {
-      where.email = {
-        contains: email,
-        mode: 'insensitive',
-      };
+      where.email = contains(email);
     }
 
     if (name) {
       const nameParts = name.split(' ');
-
       if (nameParts.length > 1) {
         where.AND = [
-          {
-            firstName: {
-              contains: nameParts[0],
-              mode: 'insensitive',
-            },
-          },
-          {
-            lastName: {
-              contains: nameParts[nameParts.length - 1],
-              mode: 'insensitive',
-            },
-          },
+          { firstName: contains(nameParts[0]) },
+          { lastName: contains(nameParts[nameParts.length - 1]) },
         ];
       } else {
-        where.OR = [
-          {
-            firstName: {
-              contains: name,
-              mode: 'insensitive',
-            },
-          },
-          {
-            lastName: {
-              contains: name,
-              mode: 'insensitive',
-            },
-          },
-        ];
+        // As before, a single-word name replaces any `q` match.
+        where.OR = [{ firstName: contains(name) }, { lastName: contains(name) }];
       }
     }
+
+    return where;
+  }
+
+  async search(filters: SearchUsersDto) {
+    const { q, email, name, page = 1, limit = 10 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildSearchWhere({ q, email, name });
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
