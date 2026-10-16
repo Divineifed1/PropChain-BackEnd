@@ -152,8 +152,11 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    // Previously an unknown or deactivated id produced 200 with an empty body.
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
