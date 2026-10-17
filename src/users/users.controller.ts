@@ -16,6 +16,7 @@ import {
   Res,
   StreamableFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
 import * as crypto from 'crypto';
@@ -30,6 +31,9 @@ import { UserRole } from '../types/prisma.types';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ActivityLogService } from './activity-log.service';
+import { UsersTraceInterceptor } from './interceptors/users-trace.interceptor';
+import { UserInjectionGuardPipe } from './pipes/injection-guard.pipe';
+import { UsersPaginationQueryDto } from './dto/pagination-query.dto';
 import {
   CreateUserDto,
   SearchUsersDto,
@@ -50,6 +54,7 @@ const REACTIVATE_WINDOW_MS = 60 * 60 * 1000;
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
+@UseInterceptors(UsersTraceInterceptor)
 @Controller('users')
 export class UsersController {
   private readonly downloadRateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -122,7 +127,8 @@ export class UsersController {
 
   // ─── Admin Endpoints ─────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a user (admin)' })
   @ApiResponse({ status: 201, description: 'User created' })
@@ -130,7 +136,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
+  create(@Body(UserInjectionGuardPipe) createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
@@ -141,11 +147,12 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: UsersPaginationQueryDto) {
+    return this.usersService.findAll(query);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 60, windowMs: 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Search users (admin)' })
   @ApiResponse({ status: 200, description: '{ data, meta } page of matching users' })
@@ -153,15 +160,12 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @Get('search')
-  search(@Query() query: SearchUsersDto) {
+  search(@Query(UserInjectionGuardPipe) query: SearchUsersDto) {
     return this.usersService.search(query);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get the caller's activity statistics' })
-  @ApiResponse({ status: 200, description: 'Property and transaction counts, account age' })
-  @ApiResponse({ status: 401, description: 'Not authenticated' })
-  @ApiResponse({ status: 404, description: 'User not found' })
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/statistics')
   getStatistics(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getUserStatistics(user.sub);
@@ -188,7 +192,7 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  update(@Param('id') id: string, @Body(UserInjectionGuardPipe) updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 
@@ -231,7 +235,7 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Validation failed' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Put('me/profile')
-  updateProfile(@CurrentUser() user: AuthUserPayload, @Body() updateProfileDto: UpdateProfileDto) {
+  updateProfile(@CurrentUser() user: AuthUserPayload, @Body(UserInjectionGuardPipe) updateProfileDto: UpdateProfileDto) {
     return this.usersService.updateProfile(user.sub, updateProfileDto);
   }
 
@@ -424,10 +428,8 @@ export class UsersController {
     return this.usersService.getMyReferrals(user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get the caller's recent logins' })
-  @ApiResponse({ status: 200, description: 'Login history entries, newest first' })
-  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/login-history')
   getLoginHistory(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getLoginHistory(user.sub);

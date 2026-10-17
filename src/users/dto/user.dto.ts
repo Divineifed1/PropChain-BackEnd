@@ -8,6 +8,7 @@ import {
   IsObject,
   IsInt,
   Min,
+  Max,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import { CleanText, TrimIdentifier } from '../sanitize.util';
@@ -145,6 +146,7 @@ export class SearchUsersDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   limit?: number = 10;
 }
 
