@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { ApiKeyAnalyticsService } from './api-key-analytics.service';
@@ -30,17 +42,23 @@ import { GoogleProfile } from './strategies/google.strategy';
 import { UserRole } from '../types/prisma.types';
 import { Request } from 'express';
 import { VerifyEmailDto } from '../users/dto/email-change.dto';
+import { AuthTraceInterceptor } from './interceptors/auth-trace.interceptor';
+import { CredentialInjectionPipe } from './pipes/credential-injection.pipe';
+import { AuthPaginationQueryDto } from './dto/pagination-query.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
+@UseInterceptors(AuthTraceInterceptor)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly apiKeyAnalyticsService: ApiKeyAnalyticsService,
   ) {}
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 5, windowMs: 60 * 60 * 1000 })
   @Post('register')
-  register(@Body() registerDto: RegisterDto, @Req() request: Request) {
+  register(@Body(CredentialInjectionPipe) registerDto: RegisterDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
     return this.authService.register(registerDto, ipAddress);
   }
@@ -57,15 +75,22 @@ export class AuthController {
     return this.authService.googleOAuthLogin(req.user);
   }
 
+  @ApiOperation({ summary: 'Log in with email and password' })
+  @ApiResponse({ status: 201, description: 'Access and refresh tokens (or a 2FA challenge)' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials or locked account' })
+  @ApiResponse({ status: 429, description: 'Too many attempts' })
   @Post('login')
-  login(@Body() loginDto: LoginDto, @Req() request: Request) {
+  login(@Body(CredentialInjectionPipe) loginDto: LoginDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
     const userAgent = request.headers['user-agent'];
     return this.authService.login(loginDto, ipAddress, userAgent);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 30, windowMs: 15 * 60 * 1000 })
   @Post('refresh')
-  refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() request: Request) {
+  refresh(@Body(CredentialInjectionPipe) refreshTokenDto: RefreshTokenDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
     const userAgent = request.headers['user-agent'];
     return this.authService.refreshToken(refreshTokenDto, ipAddress, userAgent);
@@ -73,6 +98,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out the current session' })
+  @ApiResponse({ status: 201, description: 'Tokens revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout')
   logout(
     @CurrentUser() user: AuthUserPayload,
@@ -84,6 +112,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out of every device' })
+  @ApiResponse({ status: 201, description: 'All sessions revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout-all')
   logoutAllDevices(@CurrentUser() user: AuthUserPayload, @Req() request: { accessToken?: string }) {
     return this.authService.logoutAllDevices(user, request.accessToken);
@@ -91,6 +122,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the authenticated user's profile' })
+  @ApiResponse({ status: 200, description: 'Sanitised user profile' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get('me')
   me(@CurrentUser() user: AuthUserPayload) {
     return this.authService.me(user);
@@ -98,6 +133,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, FreshTwoFactorGuard)
+  @ApiOperation({ summary: 'Change the account password' })
+  @ApiResponse({ status: 201, description: 'Password updated; other sessions revoked' })
+  @ApiResponse({ status: 400, description: 'Weak or recently used password' })
+  @ApiResponse({ status: 401, description: 'Current password incorrect' })
   @Post('change-password')
   changePassword(
     @CurrentUser() user: AuthUserPayload,
@@ -187,8 +226,8 @@ export class AuthController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Get('api-keys')
-  listApiKeys(@CurrentUser() user: AuthUserPayload) {
-    return this.authService.listApiKeys(user);
+  listApiKeys(@CurrentUser() user: AuthUserPayload, @Query() query: AuthPaginationQueryDto) {
+    return this.authService.listApiKeys(user, query);
   }
 
   @ApiBearerAuth('access-token')
@@ -223,11 +262,15 @@ export class AuthController {
     return this.apiKeyAnalyticsService.getUsageAnalytics(id, user.sub);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 5, windowMs: 60 * 60 * 1000 })
   @Post('password-reset/request')
   requestPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
     return this.authService.requestPasswordReset(requestPasswordResetDto);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Post('password-reset/reset')
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
@@ -246,6 +289,8 @@ export class AuthController {
     return this.authService.getLoginStatus(data.email);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 10, windowMs: 15 * 60 * 1000 })
   @Post('verify-email')
   verifyEmail(@Body() verifyEmailDto: VerifyEmailDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -253,6 +298,8 @@ export class AuthController {
     return this.authService.verifyInitialEmail(verifyEmailDto.token, ipAddress, userAgent);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 3, windowMs: 60 * 60 * 1000 })
   @Post('email/resend')
   resendVerification(@Body() data: { email: string }, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;

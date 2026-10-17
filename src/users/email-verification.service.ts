@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import { retryWithBackoff } from './retry.util';
 import { PrismaService } from '../database/prisma.service';
 import { ChangeEmailDto } from './dto/email-change.dto';
 import { randomBytes } from 'crypto';
@@ -54,15 +55,16 @@ export class EmailVerificationService {
     });
 
     // Send verification email with token
-    await this.emailService
-      .sendEmail({
+    await retryWithBackoff(() =>
+      this.emailService.sendEmail({
         to: data.newEmail,
         subject: 'Verify your email - PropChain',
         template: 'email-verification',
         context: { token },
         userId: userId,
         emailType: 'email_verification',
-      })
+      }),
+    )
       .catch((err) => {
         // Fail quietly but log
         this.logger.error('Failed to queue verification email:', err?.message || err);
@@ -103,15 +105,16 @@ export class EmailVerificationService {
     });
 
     // Send verification email
-    await this.emailService
-      .sendEmail({
+    await retryWithBackoff(() =>
+      this.emailService.sendEmail({
         to: user.pendingEmail,
         subject: 'Verify your email - PropChain',
         template: 'email-verification',
         context: { token },
         userId: userId,
         emailType: 'email_verification',
-      })
+      }),
+    )
       .catch((err) => {
         this.logger.error('Failed to queue verification email:', err?.message || err);
       });
