@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AUTH_DEFAULT_PAGE_SIZE, AuthPaginationQueryDto, buildPageMeta } from './dto/pagination-query.dto';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, BlacklistedToken, Document, ApiKey, PasswordHistory } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -114,6 +115,7 @@ export class AuthService {
     private readonly fraudService: FraudService,
     @Optional() private readonly apiKeyAnalyticsService?: ApiKeyAnalyticsService,
     @Optional() private readonly twoFactorService?: TwoFactorService,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
     if (!jwtSecret || jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
@@ -586,16 +588,16 @@ export class AuthService {
 
     // Invalidate entire token family if it exists
     if (blacklistedToken.tokenFamily) {
-      const familyTokens = await this.prisma.blacklistedToken.findMany({
+      // Only the count is logged, so count in the database instead of fetching rows.
+      const familyTokenCount = await this.prisma.blacklistedToken.count({
         where: {
           tokenFamily: blacklistedToken.tokenFamily,
           expiresAt: { gt: now }, // Only active tokens
         },
-        select: { jti: true },
       });
 
       this.logger.warn(
-        `Invalidating ${familyTokens.length} tokens in family ${blacklistedToken.tokenFamily} due to reuse detection`,
+        `Invalidating ${familyTokenCount} tokens in family ${blacklistedToken.tokenFamily} due to reuse detection`,
       );
 
       // All tokens in this family are already blacklisted, but we log the event
@@ -694,7 +696,7 @@ export class AuthService {
     await this.sessionsService.revokeAllSessions(user.sub);
 
     // Find all blacklisted refresh tokens for this user that are still active
-    const blacklistedRefreshTokens = await this.prisma.blacklistedToken.findMany({
+    const blacklistedRefreshTokenCount = await this.prisma.blacklistedToken.count({
       where: {
         userId: user.sub,
         tokenType: 'REFRESH',
@@ -705,13 +707,13 @@ export class AuthService {
     });
 
     this.logger.log(
-      `User ${user.sub} (${this.hashEmail(user.email)}) logged out from all devices at ${logoutTime.toISOString()}. Total active blacklisted refresh tokens: ${blacklistedRefreshTokens.length}`,
+      `User ${user.sub} (${this.hashEmail(user.email)}) logged out from all devices at ${logoutTime.toISOString()}. Total active blacklisted refresh tokens: ${blacklistedRefreshTokenCount}`,
     );
 
     return {
       message: 'Logged out from all devices successfully',
       logoutTime: logoutTime.toISOString(),
-      blacklistedTokensCount: blacklistedRefreshTokens.length,
+      blacklistedTokensCount: blacklistedRefreshTokenCount,
       clientAction: {
         clearStorage: true,
         clearCookies: true,
@@ -732,7 +734,18 @@ export class AuthService {
     return sanitizeUser(foundUser);
   }
 
+  /**
+   * Dashboard summary, cached for 30 seconds per user (Redis via CacheService).
+   * Data may be up to 30s stale; any cache failure falls back to computing it.
+   */
   async getDashboard(user: AuthUserPayload) {
+    if (!this.authCache) return this.loadDashboard(user);
+    return this.authCache.remember(this.authCache.dashboardKey(user.sub), AUTH_DASHBOARD_TTL_SECONDS, () =>
+      this.loadDashboard(user),
+    );
+  }
+
+  private async loadDashboard(user: AuthUserPayload) {
     const foundUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
     });
@@ -741,14 +754,9 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [properties, buyerTransactions, sellerTransactions, documents, apiKeys] =
+    // The recent-properties list was fetched here but never used, so it is no longer queried.
+    const [buyerTransactions, sellerTransactions, documents, apiKeysCount] =
       await Promise.all([
-        this.prisma.property.findMany({
-          where: { ownerId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        }),
         this.prisma.transaction.findMany({
           where: { buyerId: user.sub },
           orderBy: { createdAt: 'desc' },
@@ -800,11 +808,7 @@ export class AuthService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         }),
-        this.prisma.apiKey.findMany({
-          where: { userId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 3,
-        }),
+        this.prisma.apiKey.count({ where: { userId: user.sub } }),
       ]);
 
     const [
@@ -869,7 +873,7 @@ export class AuthService {
         totalSales,
         completedPurchases,
         completedSales,
-        apiKeysCount: apiKeys.length,
+        apiKeysCount,
       },
       recentActivity,
       recommendations: recommendationProperties.map((p: PropertyWithOwnerName) => ({
@@ -1230,13 +1234,33 @@ export class AuthService {
     };
   }
 
-  async listApiKeys(user: AuthUserPayload) {
-    const apiKeys = await this.prisma.apiKey.findMany({
-      where: { userId: user.sub },
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * Lists the caller's API keys. Without `page`/`limit` the full array is
+   * returned as before (existing clients keep working); with either, the result
+   * is `{ data, meta }`, newest first, with `limit` capped at 100.
+   */
+  async listApiKeys(user: AuthUserPayload, query: AuthPaginationQueryDto = {}) {
+    const where = { userId: user.sub };
+    if (query.page === undefined && query.limit === undefined) {
+      const apiKeys = await this.prisma.apiKey.findMany({ where, orderBy: { createdAt: 'desc' } });
+      return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    }
 
-    return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    const page = query.page ?? 1;
+    const limit = query.limit ?? AUTH_DEFAULT_PAGE_SIZE;
+    const [apiKeys, total] = await Promise.all([
+      this.prisma.apiKey.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.apiKey.count({ where }),
+    ]);
+    return {
+      data: apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey)),
+      meta: buildPageMeta(page, limit, total),
+    };
   }
 
   async rotateApiKey(user: AuthUserPayload, apiKeyId: string) {

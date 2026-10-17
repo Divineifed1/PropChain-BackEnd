@@ -31,8 +31,9 @@ import { UserRole } from '../types/prisma.types';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ActivityLogService } from './activity-log.service';
-import { UsersMetricsInterceptor } from './interceptors/users-metrics.interceptor';
-import { UsersRouteLimit, UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard';
+import { UsersTraceInterceptor } from './interceptors/users-trace.interceptor';
+import { UserInjectionGuardPipe } from './pipes/injection-guard.pipe';
+import { UsersPaginationQueryDto } from './dto/pagination-query.dto';
 import {
   CreateUserDto,
   SearchUsersDto,
@@ -53,7 +54,7 @@ const REACTIVATE_WINDOW_MS = 60 * 60 * 1000;
 
 @ApiTags('Users')
 @ApiBearerAuth('access-token')
-@UseInterceptors(UsersMetricsInterceptor)
+@UseInterceptors(UsersTraceInterceptor)
 @Controller('users')
 export class UsersController {
   private readonly downloadRateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -130,22 +131,22 @@ export class UsersController {
   @UsersRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Post()
-  create(@Body() createUserDto: CreateUserDto) {
+  create(@Body(UserInjectionGuardPipe) createUserDto: CreateUserDto) {
     return this.usersService.create(createUserDto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query() query: UsersPaginationQueryDto) {
+    return this.usersService.findAll(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
   @UsersRouteLimit({ max: 60, windowMs: 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Get('search')
-  search(@Query() query: SearchUsersDto) {
+  search(@Query(UserInjectionGuardPipe) query: SearchUsersDto) {
     return this.usersService.search(query);
   }
 
@@ -166,7 +167,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Put(':id')
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+  update(@Param('id') id: string, @Body(UserInjectionGuardPipe) updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }
 
@@ -201,7 +202,7 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Put('me/profile')
-  updateProfile(@CurrentUser() user: AuthUserPayload, @Body() updateProfileDto: UpdateProfileDto) {
+  updateProfile(@CurrentUser() user: AuthUserPayload, @Body(UserInjectionGuardPipe) updateProfileDto: UpdateProfileDto) {
     return this.usersService.updateProfile(user.sub, updateProfileDto);
   }
 

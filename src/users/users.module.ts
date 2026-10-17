@@ -18,12 +18,14 @@ import { DataExportService } from './data-export.service';
 import { I18nModule } from '../i18n/i18n.module';
 import { UserImportController } from './user-import.controller';
 import { UserImportService } from './user-import.service';
-import { UsersCacheService } from './users-cache.service';
-import { UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard';
+import { UsersHealthController } from './users-health.controller';
+import { UsersHealthIndicator } from './users-health.indicator';
 
 @Module({
   imports: [PrismaModule, SessionsModule, I18nModule],
   controllers: [
+    // Before UsersController: `GET /users/health` must not match `GET /users/:id`.
+    UsersHealthController,
     UsersController,
     UserPreferencesController,
     ActivityLogController,
@@ -33,8 +35,7 @@ import { UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard'
   ],
   providers: [
     UsersService,
-    UsersCacheService,
-    UsersRouteRateLimitGuard,
+    UsersHealthIndicator,
     UserPreferencesService,
     ActivityLogService,
     EmailVerificationService,
