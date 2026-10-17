@@ -1,6 +1,5 @@
 import {
   Injectable,
-  Logger,
   OnModuleInit,
   Optional,
   NotFoundException,
@@ -29,7 +28,7 @@ import { userRegistrationsTotal } from '../metrics/metrics.controller';
 
 @Injectable()
 export class UsersService implements OnModuleInit {
-  private readonly logger = new Logger(UsersService.name);
+  private readonly logger = new AppLogger(UsersService.name);
 
   constructor(
     private readonly prisma: PrismaService,
@@ -207,7 +206,7 @@ export class UsersService implements OnModuleInit {
 
       if (now - stats.mtimeMs > expirationTime) {
         fs.unlinkSync(filepath);
-        this.logger.log(`Deleted expired export file: ${file}`);
+        this.logger.log('Deleted expired export file', { event: 'users.export_file_deleted', file });
       }
     });
   }
@@ -307,6 +306,7 @@ export class UsersService implements OnModuleInit {
     });
 
     userRegistrationsTotal.inc({ method: 'email' });
+    this.logger.log('User created', { event: 'users.created', userId: user.id, emailHash: redactEmail(user.email) });
 
     return sanitizeUser(user);
   }
@@ -433,7 +433,7 @@ export class UsersService implements OnModuleInit {
   }
 
   async block(id: string) {
-    return this.prisma.user.update({
+    const blocked = await this.prisma.user.update({
       where: { id },
       data: { isBlocked: true },
       select: {
@@ -442,10 +442,12 @@ export class UsersService implements OnModuleInit {
         isBlocked: true,
       },
     });
+    this.logger.warn('User blocked', { event: 'users.blocked', userId: id });
+    return blocked;
   }
 
   async unblock(id: string) {
-    return this.prisma.user.update({
+    const unblocked = await this.prisma.user.update({
       where: { id },
       data: { isBlocked: false },
       select: {
@@ -454,12 +456,16 @@ export class UsersService implements OnModuleInit {
         isBlocked: true,
       },
     });
+    this.logger.log('User unblocked', { event: 'users.unblocked', userId: id });
+    return unblocked;
   }
 
   async remove(id: string) {
-    return this.prisma.user.delete({
+    const removed = await this.prisma.user.delete({
       where: { id },
     });
+    this.logger.warn('User deleted', { event: 'users.deleted', userId: id });
+    return removed;
   }
 
   async exportPersonalData(id: string) {
@@ -562,11 +568,12 @@ export class UsersService implements OnModuleInit {
       },
     });
 
-    this.logger.log(
-      `User ${userId} (${redactEmail(user.email)}) deactivated. Scheduled deletion: ${
-        scheduledDeletionAt ? scheduledDeletionAt.toISOString() : 'None'
-      }`,
-    );
+    this.logger.log('User deactivated', {
+      event: 'users.deactivated',
+      userId,
+      emailHash: redactEmail(user.email),
+      scheduledDeletionAt: scheduledDeletionAt ? scheduledDeletionAt.toISOString() : null,
+    });
 
     await this.sessionsService.revokeAllSessions(userId);
 
@@ -597,7 +604,11 @@ export class UsersService implements OnModuleInit {
       },
     });
 
-    this.logger.log(`Reactivation token generated for user ${userId} (${user.email})`);
+    this.logger.log('Reactivation token generated', {
+      event: 'users.reactivation_token_generated',
+      userId,
+      emailHash: redactEmail(user.email),
+    });
 
     return {
       message: 'Reactivation token generated. Use the token to reactivate your account.',
@@ -677,7 +688,11 @@ export class UsersService implements OnModuleInit {
       },
     });
 
-    this.logger.log(`User ${userId} (${redactEmail(user.email)}) reactivated`);
+    this.logger.log('User reactivated', {
+      event: 'users.reactivated',
+      userId,
+      emailHash: redactEmail(user.email),
+    });
 
     return updatedUser;
   }
@@ -833,7 +848,10 @@ export class UsersService implements OnModuleInit {
       });
     });
 
-    this.logger.log(`Deleted ${result.count} deactivated users`);
+    this.logger.log('Deleted deactivated users', {
+      event: 'users.deactivated_purged',
+      deletedCount: result.count,
+    });
 
     return { deletedCount: result.count };
   }

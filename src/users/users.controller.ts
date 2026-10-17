@@ -179,8 +179,11 @@ export class UsersController {
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const user = await this.usersService.findOne(id);
+    // Previously an unknown or deactivated id produced 200 with an empty body.
+    if (!user) throw new NotFoundException('User not found');
+    return user;
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
