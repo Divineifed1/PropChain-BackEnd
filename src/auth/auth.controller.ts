@@ -75,6 +75,11 @@ export class AuthController {
     return this.authService.googleOAuthLogin(req.user);
   }
 
+  @ApiOperation({ summary: 'Log in with email and password' })
+  @ApiResponse({ status: 201, description: 'Access and refresh tokens (or a 2FA challenge)' })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials or locked account' })
+  @ApiResponse({ status: 429, description: 'Too many attempts' })
   @Post('login')
   login(@Body(CredentialInjectionPipe) loginDto: LoginDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -93,6 +98,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out the current session' })
+  @ApiResponse({ status: 201, description: 'Tokens revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout')
   logout(
     @CurrentUser() user: AuthUserPayload,
@@ -104,6 +112,9 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Log out of every device' })
+  @ApiResponse({ status: 201, description: 'All sessions revoked' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Post('logout-all')
   logoutAllDevices(@CurrentUser() user: AuthUserPayload, @Req() request: { accessToken?: string }) {
     return this.authService.logoutAllDevices(user, request.accessToken);
@@ -111,6 +122,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get the authenticated user's profile' })
+  @ApiResponse({ status: 200, description: 'Sanitised user profile' })
+  @ApiResponse({ status: 401, description: 'Not authenticated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
   @Get('me')
   me(@CurrentUser() user: AuthUserPayload) {
     return this.authService.me(user);
@@ -118,6 +133,10 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, FreshTwoFactorGuard)
+  @ApiOperation({ summary: 'Change the account password' })
+  @ApiResponse({ status: 201, description: 'Password updated; other sessions revoked' })
+  @ApiResponse({ status: 400, description: 'Weak or recently used password' })
+  @ApiResponse({ status: 401, description: 'Current password incorrect' })
   @Post('change-password')
   changePassword(
     @CurrentUser() user: AuthUserPayload,
