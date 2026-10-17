@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AUTH_DEFAULT_PAGE_SIZE, AuthPaginationQueryDto, buildPageMeta } from './dto/pagination-query.dto';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, BlacklistedToken, Document, ApiKey, PasswordHistory } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -1230,13 +1231,33 @@ export class AuthService {
     };
   }
 
-  async listApiKeys(user: AuthUserPayload) {
-    const apiKeys = await this.prisma.apiKey.findMany({
-      where: { userId: user.sub },
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * Lists the caller's API keys. Without `page`/`limit` the full array is
+   * returned as before (existing clients keep working); with either, the result
+   * is `{ data, meta }`, newest first, with `limit` capped at 100.
+   */
+  async listApiKeys(user: AuthUserPayload, query: AuthPaginationQueryDto = {}) {
+    const where = { userId: user.sub };
+    if (query.page === undefined && query.limit === undefined) {
+      const apiKeys = await this.prisma.apiKey.findMany({ where, orderBy: { createdAt: 'desc' } });
+      return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    }
 
-    return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    const page = query.page ?? 1;
+    const limit = query.limit ?? AUTH_DEFAULT_PAGE_SIZE;
+    const [apiKeys, total] = await Promise.all([
+      this.prisma.apiKey.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.apiKey.count({ where }),
+    ]);
+    return {
+      data: apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey)),
+      meta: buildPageMeta(page, limit, total),
+    };
   }
 
   async rotateApiKey(user: AuthUserPayload, apiKeyId: string) {
