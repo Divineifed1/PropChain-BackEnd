@@ -2,9 +2,11 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
+  Optional,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { USERS_DEFAULT_PAGE_SIZE, UsersPaginationQueryDto, buildUsersPageMeta } from './dto/pagination-query.dto';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -32,6 +34,7 @@ export class UsersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionsService: SessionsService,
+    @Optional() private readonly usersCache?: UsersCacheService,
   ) {}
 
   async getProfile(userId: string): Promise<ProfileResponseDto> {
@@ -209,13 +212,22 @@ export class UsersService implements OnModuleInit {
     });
   }
 
+  /** Cached for 60 seconds per user; statistics may be that stale. Cache failures fall back to the database. */
   async getUserStatistics(userId: string) {
+    if (!this.usersCache) return this.loadUserStatistics(userId);
+    return this.usersCache.remember(this.usersCache.statisticsKey(userId), USER_STATISTICS_TTL_SECONDS, () =>
+      this.loadUserStatistics(userId),
+    );
+  }
+
+  private async loadUserStatistics(userId: string) {
+    // Count in the database instead of loading every property and transaction row.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        properties: true,
-        buyerTransactions: true,
-        sellerTransactions: true,
+      select: {
+        createdAt: true,
+        lastActivityAt: true,
+        _count: { select: { properties: true, buyerTransactions: true, sellerTransactions: true } },
       },
     });
 
@@ -223,8 +235,8 @@ export class UsersService implements OnModuleInit {
       throw new NotFoundException('User not found');
     }
 
-    const propertiesCount = user.properties.length;
-    const transactionsCount = user.buyerTransactions.length + user.sellerTransactions.length;
+    const propertiesCount = user._count.properties;
+    const transactionsCount = user._count.buyerTransactions + user._count.sellerTransactions;
 
     const now = new Date();
     const createdAt = new Date(user.createdAt);
@@ -299,21 +311,39 @@ export class UsersService implements OnModuleInit {
     return sanitizeUser(user);
   }
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      where: {
-        isDeactivated: false,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        createdAt: true,
-      },
-    });
+  /**
+   * Lists active users. Without `page`/`limit` the full array is returned as
+   * before; with either, the result is `{ data, meta }`, newest first, with
+   * `limit` capped at 100 and `id` as a tie-breaker so pages are stable.
+   */
+  async findAll(query: UsersPaginationQueryDto = {}) {
+    const where = { isDeactivated: false };
+    const select = {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      isVerified: true,
+      createdAt: true,
+    };
+    if (query.page === undefined && query.limit === undefined) {
+      return this.prisma.user.findMany({ where, select });
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? USERS_DEFAULT_PAGE_SIZE;
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { data, meta: buildUsersPageMeta(page, limit, total) };
   }
 
   async findOne(id: string) {
@@ -670,79 +700,45 @@ export class UsersService implements OnModuleInit {
     });
   }
 
-  async search(filters: SearchUsersDto) {
-    const { q, email, name, page = 1, limit = 10 } = filters;
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.UserWhereInput = {
-      isDeactivated: false,
-    };
+  /**
+   * Builds the Prisma filter for the admin user search: active users only, with
+   * a free-text match over email and names (`q`), a partial email match, and a
+   * name match ("First Last" matches both parts, a single word matches either).
+   */
+  private buildSearchWhere(filters: { q?: string; email?: string; name?: string }): Prisma.UserWhereInput {
+    const { q, email, name } = filters;
+    const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
+    const where: Prisma.UserWhereInput = { isDeactivated: false };
 
     if (q) {
-      where.OR = [
-        {
-          email: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-        {
-          firstName: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-        {
-          lastName: {
-            contains: q,
-            mode: 'insensitive',
-          },
-        },
-      ];
+      where.OR = [{ email: contains(q) }, { firstName: contains(q) }, { lastName: contains(q) }];
     }
 
     if (email) {
-      where.email = {
-        contains: email,
-        mode: 'insensitive',
-      };
+      where.email = contains(email);
     }
 
     if (name) {
       const nameParts = name.split(' ');
-
       if (nameParts.length > 1) {
         where.AND = [
-          {
-            firstName: {
-              contains: nameParts[0],
-              mode: 'insensitive',
-            },
-          },
-          {
-            lastName: {
-              contains: nameParts[nameParts.length - 1],
-              mode: 'insensitive',
-            },
-          },
+          { firstName: contains(nameParts[0]) },
+          { lastName: contains(nameParts[nameParts.length - 1]) },
         ];
       } else {
-        where.OR = [
-          {
-            firstName: {
-              contains: name,
-              mode: 'insensitive',
-            },
-          },
-          {
-            lastName: {
-              contains: name,
-              mode: 'insensitive',
-            },
-          },
-        ];
+        // As before, a single-word name replaces any `q` match.
+        where.OR = [{ firstName: contains(name) }, { lastName: contains(name) }];
       }
     }
+
+    return where;
+  }
+
+  async search(filters: SearchUsersDto) {
+    const { q, email, name, page = 1, limit = 10 } = filters;
+    const skip = (page - 1) * limit;
+
+    const where = this.buildSearchWhere({ q, email, name });
 
     const [users, total] = await Promise.all([
       this.prisma.user.findMany({
@@ -885,6 +881,8 @@ export class UsersService implements OnModuleInit {
       orderBy: {
         timestamp: 'desc',
       },
+      // Newest 100 entries: the history grows without bound, and one response should not.
+      take: 100,
       select: {
         timestamp: true,
         ipAddress: true,

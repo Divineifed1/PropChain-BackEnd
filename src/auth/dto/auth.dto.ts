@@ -10,8 +10,11 @@ import {
   MinLength,
   Matches,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { CleanText, TrimIdentifier } from '../sanitize.util';
 
 export class RegisterDto {
+  @Transform(TrimIdentifier)
   @IsEmail()
   email: string;
 
@@ -23,10 +26,12 @@ export class RegisterDto {
   })
   password: string;
 
+  @Transform(CleanText)
   @IsString()
   @IsNotEmpty()
   firstName: string;
 
+  @Transform(CleanText)
   @IsString()
   @IsNotEmpty()
   lastName: string;
@@ -37,6 +42,7 @@ export class RegisterDto {
 }
 
 export class LoginDto {
+  @Transform(TrimIdentifier)
   @IsEmail()
   email: string;
 

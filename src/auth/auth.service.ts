@@ -6,9 +6,9 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AppLogger } from '../common/logger';
+import { AUTH_DEFAULT_PAGE_SIZE, AuthPaginationQueryDto, buildPageMeta } from './dto/pagination-query.dto';
 import { ConfigService } from '@nestjs/config';
-import { Prisma, BlacklistedToken, Document, ApiKey, PasswordHistory } from '@prisma/client';
+import { Prisma, BlacklistedToken, Document, ApiKey } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import * as jwt from 'jsonwebtoken';
 import { PrismaService } from '../database/prisma.service';
@@ -114,6 +114,7 @@ export class AuthService {
     private readonly fraudService: FraudService,
     @Optional() private readonly apiKeyAnalyticsService?: ApiKeyAnalyticsService,
     @Optional() private readonly twoFactorService?: TwoFactorService,
+    @Optional() private readonly authCache?: AuthCacheService,
   ) {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
     if (!jwtSecret || jwtSecret.length < MIN_JWT_SECRET_LENGTH) {
@@ -597,16 +598,16 @@ export class AuthService {
 
     // Invalidate entire token family if it exists
     if (blacklistedToken.tokenFamily) {
-      const familyTokens = await this.prisma.blacklistedToken.findMany({
+      // Only the count is logged, so count in the database instead of fetching rows.
+      const familyTokenCount = await this.prisma.blacklistedToken.count({
         where: {
           tokenFamily: blacklistedToken.tokenFamily,
           expiresAt: { gt: now }, // Only active tokens
         },
-        select: { jti: true },
       });
 
       this.logger.warn(
-        `Invalidating ${familyTokens.length} tokens in family ${blacklistedToken.tokenFamily} due to reuse detection`,
+        `Invalidating ${familyTokenCount} tokens in family ${blacklistedToken.tokenFamily} due to reuse detection`,
       );
 
       // All tokens in this family are already blacklisted, but we log the event
@@ -712,7 +713,7 @@ export class AuthService {
     await this.sessionsService.revokeAllSessions(user.sub);
 
     // Find all blacklisted refresh tokens for this user that are still active
-    const blacklistedRefreshTokens = await this.prisma.blacklistedToken.findMany({
+    const blacklistedRefreshTokenCount = await this.prisma.blacklistedToken.count({
       where: {
         userId: user.sub,
         tokenType: 'REFRESH',
@@ -723,13 +724,13 @@ export class AuthService {
     });
 
     this.logger.log(
-      `User ${user.sub} (${this.hashEmail(user.email)}) logged out from all devices at ${logoutTime.toISOString()}. Total active blacklisted refresh tokens: ${blacklistedRefreshTokens.length}`,
+      `User ${user.sub} (${this.hashEmail(user.email)}) logged out from all devices at ${logoutTime.toISOString()}. Total active blacklisted refresh tokens: ${blacklistedRefreshTokenCount}`,
     );
 
     return {
       message: 'Logged out from all devices successfully',
       logoutTime: logoutTime.toISOString(),
-      blacklistedTokensCount: blacklistedRefreshTokens.length,
+      blacklistedTokensCount: blacklistedRefreshTokenCount,
       clientAction: {
         clearStorage: true,
         clearCookies: true,
@@ -750,7 +751,18 @@ export class AuthService {
     return sanitizeUser(foundUser);
   }
 
+  /**
+   * Dashboard summary, cached for 30 seconds per user (Redis via CacheService).
+   * Data may be up to 30s stale; any cache failure falls back to computing it.
+   */
   async getDashboard(user: AuthUserPayload) {
+    if (!this.authCache) return this.loadDashboard(user);
+    return this.authCache.remember(this.authCache.dashboardKey(user.sub), AUTH_DASHBOARD_TTL_SECONDS, () =>
+      this.loadDashboard(user),
+    );
+  }
+
+  private async loadDashboard(user: AuthUserPayload) {
     const foundUser = await this.prisma.user.findUnique({
       where: { id: user.sub },
     });
@@ -759,14 +771,9 @@ export class AuthService {
       throw new NotFoundException('User not found');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const [properties, buyerTransactions, sellerTransactions, documents, apiKeys] =
+    // The recent-properties list was fetched here but never used, so it is no longer queried.
+    const [buyerTransactions, sellerTransactions, documents, apiKeysCount] =
       await Promise.all([
-        this.prisma.property.findMany({
-          where: { ownerId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        }),
         this.prisma.transaction.findMany({
           where: { buyerId: user.sub },
           orderBy: { createdAt: 'desc' },
@@ -818,11 +825,7 @@ export class AuthService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         }),
-        this.prisma.apiKey.findMany({
-          where: { userId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 3,
-        }),
+        this.prisma.apiKey.count({ where: { userId: user.sub } }),
       ]);
 
     const [
@@ -887,7 +890,7 @@ export class AuthService {
         totalSales,
         completedPurchases,
         completedSales,
-        apiKeysCount: apiKeys.length,
+        apiKeysCount,
       },
       recentActivity,
       recommendations: recommendationProperties.map((p: PropertyWithOwnerName) => ({
@@ -906,6 +909,51 @@ export class AuthService {
         createdAt: p.createdAt,
       })),
     };
+  }
+
+  /** Throws a 400 listing every complexity rule the password breaks. */
+  private assertPasswordMeetsPolicy(newPassword: string): void {
+    const passwordErrors = validatePassword(newPassword, this.configService);
+    if (passwordErrors.length > 0) {
+      throw new BadRequestException(
+        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
+      );
+    }
+  }
+
+  /** Throws a 400 if `newPassword` matches any of the recent password hashes. */
+  private async assertPasswordNotReused(
+    newPassword: string,
+    recentHashes: string[],
+    historyLimit: number,
+  ): Promise<void> {
+    const reused = await Promise.all(recentHashes.map((hash) => comparePassword(newPassword, hash)));
+    if (reused.some(Boolean)) {
+      throw new BadRequestException(
+        `Password reuse is not allowed for the last ${historyLimit} passwords`,
+      );
+    }
+  }
+
+  /** Stores the new hash and deletes history entries beyond the retention limit. */
+  private async recordPasswordHistory(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    passwordHash: string,
+    historyLimit: number,
+  ): Promise<void> {
+    await tx.passwordHistory.create({ data: { userId, passwordHash } });
+
+    const expired = await tx.passwordHistory.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      skip: historyLimit,
+    });
+    if (expired.length > 0) {
+      await tx.passwordHistory.deleteMany({
+        where: { id: { in: expired.map((entry: { id: string }) => entry.id) } },
+      });
+    }
   }
 
   async changePassword(user: AuthUserPayload, data: ChangePasswordDto) {
@@ -931,26 +979,14 @@ export class AuthService {
       throw new UnauthorizedException('Current password is incorrect');
     }
 
-    const passwordErrors = validatePassword(data.newPassword, this.configService);
-    if (passwordErrors.length > 0) {
-      throw new BadRequestException(
-        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
-      );
-    }
-
-    const passwordReused = await Promise.all(
+    this.assertPasswordMeetsPolicy(data.newPassword);
+    await this.assertPasswordNotReused(
+      data.newPassword,
       existingUser.passwordHistory
         .slice(0, passwordHistoryLimit)
-        .map((entry: { passwordHash: string }) =>
-          comparePassword(data.newPassword, entry.passwordHash),
-        ),
+        .map((entry: { passwordHash: string }) => entry.passwordHash),
+      passwordHistoryLimit,
     );
-
-    if (passwordReused.some(Boolean)) {
-      throw new BadRequestException(
-        `Password reuse is not allowed for the last ${passwordHistoryLimit} passwords`,
-      );
-    }
 
     const newPasswordHash = await hashPassword(data.newPassword, this.bcryptRounds);
 
@@ -962,28 +998,7 @@ export class AuthService {
         },
       });
 
-      await tx.passwordHistory.create({
-        data: {
-          userId: existingUser.id,
-          passwordHash: newPasswordHash,
-        },
-      });
-
-      const historyEntries = await tx.passwordHistory.findMany({
-        where: { userId: existingUser.id },
-        orderBy: { createdAt: 'desc' },
-        skip: passwordHistoryLimit,
-      });
-
-      if (historyEntries.length > 0) {
-        await tx.passwordHistory.deleteMany({
-          where: {
-            id: {
-              in: historyEntries.map((entry: { id: string }) => entry.id),
-            },
-          },
-        });
-      }
+      await this.recordPasswordHistory(tx, existingUser.id, newPasswordHash, passwordHistoryLimit);
     });
 
     // Audit log password change (#886)
@@ -1248,13 +1263,33 @@ export class AuthService {
     };
   }
 
-  async listApiKeys(user: AuthUserPayload) {
-    const apiKeys = await this.prisma.apiKey.findMany({
-      where: { userId: user.sub },
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * Lists the caller's API keys. Without `page`/`limit` the full array is
+   * returned as before (existing clients keep working); with either, the result
+   * is `{ data, meta }`, newest first, with `limit` capped at 100.
+   */
+  async listApiKeys(user: AuthUserPayload, query: AuthPaginationQueryDto = {}) {
+    const where = { userId: user.sub };
+    if (query.page === undefined && query.limit === undefined) {
+      const apiKeys = await this.prisma.apiKey.findMany({ where, orderBy: { createdAt: 'desc' } });
+      return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    }
 
-    return apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey));
+    const page = query.page ?? 1;
+    const limit = query.limit ?? AUTH_DEFAULT_PAGE_SIZE;
+    const [apiKeys, total] = await Promise.all([
+      this.prisma.apiKey.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.apiKey.count({ where }),
+    ]);
+    return {
+      data: apiKeys.map((apiKey: ApiKey) => this.toApiKeyResponse(apiKey)),
+      meta: buildPageMeta(page, limit, total),
+    };
   }
 
   async rotateApiKey(user: AuthUserPayload, apiKeyId: string) {
@@ -1689,18 +1724,13 @@ export class AuthService {
       },
     });
 
-    // Send reset email with raw token (not the hash). A mail failure must not change
-    // the response: a 500 here would reveal that the address belongs to an account.
-    try {
-      await this.emailService.sendPasswordResetEmail(user.email, resetToken);
-    } catch (err) {
-      this.logger.error('Failed to send password reset email', {
-        event: 'auth.password_reset_email_failed',
-        userId: user.id,
-        emailHash: this.hashEmail(user.email),
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
+    // Send reset email with raw token (not the hash)
+    // Retried with backoff: a transient mail-provider failure should not lose the reset email.
+    await retryWithBackoff(() => this.emailService.sendPasswordResetEmail(user.email, resetToken), {
+      attempts: 3,
+      baseDelayMs: 300,
+      maxDelayMs: 2_000,
+    });
   }
 
   async resetPassword(data: ResetPasswordDto): Promise<void> {
@@ -1728,12 +1758,7 @@ export class AuthService {
 
     const passwordHistoryLimit = this.getPasswordHistoryLimit();
 
-    const passwordErrors = validatePassword(data.newPassword, this.configService);
-    if (passwordErrors.length > 0) {
-      throw new BadRequestException(
-        `Password does not meet complexity requirements: ${passwordErrors.join('; ')}`,
-      );
-    }
+    this.assertPasswordMeetsPolicy(data.newPassword);
 
     // Check if new password was used recently
     const recentPasswords = await this.prisma.passwordHistory.findMany({
@@ -1741,15 +1766,11 @@ export class AuthService {
       orderBy: { createdAt: 'desc' },
       take: passwordHistoryLimit,
     });
-
-    const reuseResults = await Promise.all(
-      recentPasswords.map((entry) => comparePassword(data.newPassword, entry.passwordHash)),
+    await this.assertPasswordNotReused(
+      data.newPassword,
+      recentPasswords.map((entry) => entry.passwordHash),
+      passwordHistoryLimit,
     );
-    if (reuseResults.some(Boolean)) {
-      throw new BadRequestException(
-        `Password reuse is not allowed for the last ${passwordHistoryLimit} passwords`,
-      );
-    }
 
     const newPasswordHash = await hashPassword(data.newPassword, this.bcryptRounds);
 
@@ -1765,27 +1786,7 @@ export class AuthService {
         data: { usedAt: new Date() },
       });
 
-      await tx.passwordHistory.create({
-        data: {
-          userId: resetToken.userId,
-          passwordHash: newPasswordHash,
-        },
-      });
-
-      // Clean up old password history entries
-      const historyEntries = await tx.passwordHistory.findMany({
-        where: { userId: resetToken.userId },
-        orderBy: { createdAt: 'desc' },
-        skip: passwordHistoryLimit,
-      });
-
-      if (historyEntries.length > 0) {
-        await tx.passwordHistory.deleteMany({
-          where: {
-            id: { in: historyEntries.map((entry: PasswordHistory) => entry.id) },
-          },
-        });
-      }
+      await this.recordPasswordHistory(tx, resetToken.userId, newPasswordHash, passwordHistoryLimit);
     });
 
     await this.sessionsService.revokeAllSessions(resetToken.userId);
@@ -1855,13 +1856,23 @@ export class AuthService {
     }
 
     try {
-      const response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+      // Retried with backoff on network errors, 429 and 5xx; other responses are final.
+      const response = await retryWithBackoff(
+        async () => {
+          const res = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `secret=${secret}&response=${token}`,
+          });
+          if (res.status === 429 || res.status >= 500) {
+            throw new TransientError(`reCAPTCHA responded ${res.status}`);
+          }
+          return res;
         },
-        body: `secret=${secret}&response=${token}`,
-      });
+        { attempts: 3, baseDelayMs: 200, maxDelayMs: 1_500 },
+      );
 
       const data = (await response.json()) as RecaptchaVerifyResponse;
 
