@@ -5,6 +5,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { USERS_DEFAULT_PAGE_SIZE, UsersPaginationQueryDto, buildUsersPageMeta } from './dto/pagination-query.dto';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -299,21 +300,39 @@ export class UsersService implements OnModuleInit {
     return sanitizeUser(user);
   }
 
-  async findAll() {
-    return this.prisma.user.findMany({
-      where: {
-        isDeactivated: false,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        createdAt: true,
-      },
-    });
+  /**
+   * Lists active users. Without `page`/`limit` the full array is returned as
+   * before; with either, the result is `{ data, meta }`, newest first, with
+   * `limit` capped at 100 and `id` as a tie-breaker so pages are stable.
+   */
+  async findAll(query: UsersPaginationQueryDto = {}) {
+    const where = { isDeactivated: false };
+    const select = {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      isVerified: true,
+      createdAt: true,
+    };
+    if (query.page === undefined && query.limit === undefined) {
+      return this.prisma.user.findMany({ where, select });
+    }
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? USERS_DEFAULT_PAGE_SIZE;
+    const [data, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        select,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { data, meta: buildUsersPageMeta(page, limit, total) };
   }
 
   async findOne(id: string) {
