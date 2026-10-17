@@ -71,8 +71,11 @@ export class PropertiesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.propertiesService.findOne(id);
+  async findOne(@Param('id') id: string) {
+    const property = await this.propertiesService.findOne(id);
+    // Previously an unknown id produced 200 with an empty body.
+    if (!property) throw new NotFoundException(`Property with ID ${id} not found`);
+    return property;
   }
 
   @ApiBearerAuth('access-token')

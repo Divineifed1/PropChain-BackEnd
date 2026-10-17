@@ -2,9 +2,9 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { AppLogger } from '../common/logger';
 import { Decimal } from '@prisma/client/runtime/library';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
@@ -117,7 +117,7 @@ export class PropertiesService {
     }
 
     if (!(await this.checkGeocodeRateLimit())) {
-      this.logger.warn(`Geocoding rate limit hit for property ${propertyId}`);
+      this.logger.warn('Geocoding rate limit hit', { event: 'properties.geocode_rate_limited', propertyId });
       return null;
     }
 
@@ -152,7 +152,7 @@ export class PropertiesService {
     });
   }
 
-  private readonly logger = new Logger('PropertiesService');
+  private readonly logger = new AppLogger('PropertiesService');
 
   async create(createPropertyDto: CreatePropertyDto, ownerId: string) {
     const { price, squareFeet, lotSize, latitude, longitude, hoaMonthlyFee, ...rest } =
@@ -206,9 +206,33 @@ export class PropertiesService {
     });
 
     propertiesTotal.inc();
+    this.logger.log('Property created', {
+      event: 'properties.created',
+      propertyId: property.id,
+      ownerId,
+    });
 
-    await this.fraudService.evaluatePropertyCreated(property.id);
-    await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    // The property already exists at this point. If a follow-up step fails, report
+    // it in the logs but still return the property: failing the request would make
+    // the client retry and hit the "address already exists" error for its own record.
+    try {
+      await this.fraudService.evaluatePropertyCreated(property.id);
+    } catch (err) {
+      this.logger.error('Fraud evaluation failed for new property', {
+        event: 'properties.fraud_evaluation_failed',
+        propertyId: property.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    try {
+      await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    } catch (err) {
+      this.logger.warn('Property cache invalidation failed', {
+        event: 'properties.cache_invalidation_failed',
+        propertyId: property.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     return property;
   }
@@ -425,6 +449,7 @@ export class PropertiesService {
     });
 
     await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    this.logger.warn('Property deleted', { event: 'properties.deleted', propertyId: id, userId: user.sub });
     return updated;
   }
 
@@ -453,6 +478,7 @@ export class PropertiesService {
     });
 
     await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    this.logger.log('Property restored', { event: 'properties.restored', propertyId: id, userId: user.sub });
     return updated;
   }
 
