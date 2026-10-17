@@ -55,6 +55,8 @@ export class AuthController {
     private readonly apiKeyAnalyticsService: ApiKeyAnalyticsService,
   ) {}
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 5, windowMs: 60 * 60 * 1000 })
   @Post('register')
   register(@Body(CredentialInjectionPipe) registerDto: RegisterDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -80,6 +82,8 @@ export class AuthController {
     return this.authService.login(loginDto, ipAddress, userAgent);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 30, windowMs: 15 * 60 * 1000 })
   @Post('refresh')
   refresh(@Body(CredentialInjectionPipe) refreshTokenDto: RefreshTokenDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -239,11 +243,15 @@ export class AuthController {
     return this.apiKeyAnalyticsService.getUsageAnalytics(id, user.sub);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 5, windowMs: 60 * 60 * 1000 })
   @Post('password-reset/request')
   requestPasswordReset(@Body() requestPasswordResetDto: RequestPasswordResetDto) {
     return this.authService.requestPasswordReset(requestPasswordResetDto);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Post('password-reset/reset')
   resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
     return this.authService.resetPassword(resetPasswordDto);
@@ -262,6 +270,8 @@ export class AuthController {
     return this.authService.getLoginStatus(data.email);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 10, windowMs: 15 * 60 * 1000 })
   @Post('verify-email')
   verifyEmail(@Body() verifyEmailDto: VerifyEmailDto, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
@@ -269,6 +279,8 @@ export class AuthController {
     return this.authService.verifyInitialEmail(verifyEmailDto.token, ipAddress, userAgent);
   }
 
+  @UseGuards(AuthRouteRateLimitGuard)
+  @AuthRouteLimit({ max: 3, windowMs: 60 * 60 * 1000 })
   @Post('email/resend')
   resendVerification(@Body() data: { email: string }, @Req() request: Request) {
     const ipAddress = request.ip || request.socket.remoteAddress;
