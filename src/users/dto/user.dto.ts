@@ -8,6 +8,7 @@ import {
   IsObject,
   IsInt,
   Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InputType, Field } from '@nestjs/graphql';
@@ -135,6 +136,7 @@ export class SearchUsersDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(100)
   limit?: number = 10;
 }
 
