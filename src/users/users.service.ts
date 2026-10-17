@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   OnModuleInit,
+  Optional,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
@@ -33,6 +34,7 @@ export class UsersService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessionsService: SessionsService,
+    @Optional() private readonly usersCache?: UsersCacheService,
   ) {}
 
   async getProfile(userId: string): Promise<ProfileResponseDto> {
@@ -210,13 +212,22 @@ export class UsersService implements OnModuleInit {
     });
   }
 
+  /** Cached for 60 seconds per user; statistics may be that stale. Cache failures fall back to the database. */
   async getUserStatistics(userId: string) {
+    if (!this.usersCache) return this.loadUserStatistics(userId);
+    return this.usersCache.remember(this.usersCache.statisticsKey(userId), USER_STATISTICS_TTL_SECONDS, () =>
+      this.loadUserStatistics(userId),
+    );
+  }
+
+  private async loadUserStatistics(userId: string) {
+    // Count in the database instead of loading every property and transaction row.
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: {
-        properties: true,
-        buyerTransactions: true,
-        sellerTransactions: true,
+      select: {
+        createdAt: true,
+        lastActivityAt: true,
+        _count: { select: { properties: true, buyerTransactions: true, sellerTransactions: true } },
       },
     });
 
@@ -224,8 +235,8 @@ export class UsersService implements OnModuleInit {
       throw new NotFoundException('User not found');
     }
 
-    const propertiesCount = user.properties.length;
-    const transactionsCount = user.buyerTransactions.length + user.sellerTransactions.length;
+    const propertiesCount = user._count.properties;
+    const transactionsCount = user._count.buyerTransactions + user._count.sellerTransactions;
 
     const now = new Date();
     const createdAt = new Date(user.createdAt);
@@ -904,6 +915,8 @@ export class UsersService implements OnModuleInit {
       orderBy: {
         timestamp: 'desc',
       },
+      // Newest 100 entries: the history grows without bound, and one response should not.
+      take: 100,
       select: {
         timestamp: true,
         ipAddress: true,

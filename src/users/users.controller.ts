@@ -127,7 +127,8 @@ export class UsersController {
 
   // ─── Admin Endpoints ─────────────────────────────────────────────
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Post()
   create(@Body(UserInjectionGuardPipe) createUserDto: CreateUserDto) {
@@ -141,14 +142,16 @@ export class UsersController {
     return this.usersService.findAll(query);
   }
 
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 60, windowMs: 60 * 1000 })
   @Roles(UserRole.ADMIN)
   @Get('search')
   search(@Query(UserInjectionGuardPipe) query: SearchUsersDto) {
     return this.usersService.search(query);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/statistics')
   getStatistics(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getUserStatistics(user.sub);
@@ -392,7 +395,8 @@ export class UsersController {
     return this.usersService.getMyReferrals(user.sub);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, UsersRouteRateLimitGuard)
+  @UsersRouteLimit({ max: 30, windowMs: 60 * 1000 })
   @Get('me/login-history')
   getLoginHistory(@CurrentUser() user: AuthUserPayload) {
     return this.usersService.getLoginHistory(user.sub);
