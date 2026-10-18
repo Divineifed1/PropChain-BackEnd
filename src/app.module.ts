@@ -92,6 +92,7 @@ import { APP_FILTER } from '@nestjs/core';
     PropertyComparisonModule,
     OpenHouseModule,
     MortgageCalculatorModule,
+    InvestmentsModule,
     SupportTicketsModule,
     AuditModule,
     MetricsModule,
