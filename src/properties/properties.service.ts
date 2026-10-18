@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { AppLogger } from '../common/logger';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -19,6 +20,7 @@ import { PropertyStatus, UserRole } from '../types/prisma.types';
 import { retryListingQuery } from './listing-retry.util';
 import { CacheService } from '../cache/cache.service';
 import { CACHE_TAGS } from '../cache/cache.config';
+import { PropertiesCacheService } from './properties-cache.service';
 import {
   canTransitionPropertyStatus,
   getAllowedNextPropertyStatuses,
@@ -52,7 +54,25 @@ export class PropertiesService {
     private readonly fraudService: FraudService,
     private readonly geocodingService: GeocodingService,
     private readonly cacheService: CacheService,
+    @Optional() private readonly propertiesCache?: PropertiesCacheService,
   ) {}
+
+  /**
+   * Drop the cached detail view of a property. Best-effort: a cache failure is
+   * logged and ignored, because the entry also expires on its own within the TTL.
+   */
+  private async invalidateCachedProperty(propertyId: string): Promise<void> {
+    if (!this.propertiesCache) return;
+    try {
+      await this.propertiesCache.invalidateProperty(propertyId);
+    } catch (err) {
+      this.logger.warn('Property detail cache invalidation failed', {
+        event: 'properties.detail_cache_invalidation_failed',
+        propertyId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   private async checkGeocodeRateLimit(): Promise<boolean> {
     const now = Date.now();
@@ -234,6 +254,7 @@ export class PropertiesService {
         error: err instanceof Error ? err.message : String(err),
       });
     }
+    await this.invalidateCachedProperty(property.id);
 
     return property;
   }
@@ -244,11 +265,16 @@ export class PropertiesService {
       ? { ...where, status: where.status ?? PropertyStatus.ACTIVE, deleted: false }
       : { status: PropertyStatus.ACTIVE, deleted: false };
 
+    // Without an explicit sort the database returned rows in arbitrary order, so
+    // `skip`/`take` paging could repeat or skip a property between calls. Default
+    // to newest first with `id` as a tie-breaker to make paging stable.
+    const finalOrderBy = orderBy ?? { createdAt: 'desc' as const, id: 'desc' as const };
+
     return (this.prisma.property as any).findMany({
       skip,
       take,
       where: finalWhere,
-      orderBy,
+      orderBy: finalOrderBy,
       include: {
         owner: {
           select: {
@@ -276,33 +302,38 @@ export class PropertiesService {
   }
 
   async findOne(id: string) {
-    return (this.prisma.property as any).findUnique({
-      where: { id },
-      include: {
-        owner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
+    const load = () =>
+      (this.prisma.property as any).findUnique({
+        where: { id },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
           },
-        },
-        documents: true,
-        agents: {
-          include: {
-            agent: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
+          documents: true,
+          agents: {
+            include: {
+              agent: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
+
+    // Served from Redis when the module is wired with PropertiesCacheService.
+    if (!this.propertiesCache) return load();
+    return this.propertiesCache.rememberExistingProperty(id, load);
   }
 
   async update(id: string, updatePropertyDto: UpdatePropertyDto, userId?: string) {
@@ -422,6 +453,7 @@ export class PropertiesService {
     });
 
     await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    await this.invalidateCachedProperty(id);
     return updatedProperty;
   }
 
@@ -450,6 +482,7 @@ export class PropertiesService {
     });
 
     await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    await this.invalidateCachedProperty(id);
     this.logger.warn('Property deleted', { event: 'properties.deleted', propertyId: id, userId: user.sub });
     return updated;
   }
@@ -479,6 +512,7 @@ export class PropertiesService {
     });
 
     await this.cacheService.invalidateByTag(CACHE_TAGS.PROPERTIES);
+    await this.invalidateCachedProperty(id);
     this.logger.log('Property restored', { event: 'properties.restored', propertyId: id, userId: user.sub });
     return updated;
   }
@@ -486,7 +520,7 @@ export class PropertiesService {
   async findByOwnerId(ownerId: string) {
     return this.prisma.property.findMany({
       where: { ownerId },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: 'desc', id: 'desc' },
     });
   }
 
@@ -573,6 +607,10 @@ export class PropertiesService {
       data: { status: nextStatus },
     });
 
+    // Drop the cached detail view first: the read below would otherwise serve the
+    // pre-transition status.
+    await this.invalidateCachedProperty(propertyId);
+
     return this.findOne(propertyId);
   }
 
@@ -601,9 +639,22 @@ export class PropertiesService {
       : this.searchByPaging(where, page, limit, sort);
   }
 
+
   private hasTrustScoreFilter(dto: SearchPropertiesDto): boolean {
     return dto.minNeighborhoodTrustScore !== undefined || dto.maxNeighborhoodTrustScore !== undefined;
   }
+
+    if (hasTrustScoreFilter) {
+      // Fetch all matching properties with neighborhood to filter by trust score in-memory
+      const allItems = await this.prisma.property.findMany({
+        where,
+        orderBy: [{ [sortBy]: sortOrder }, { id: sortOrder }],
+        include: {
+          owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+          neighborhood: true,
+        },
+      });
+ (feat(properties): Prometheus metrics, query optimisation, Redis caching, per-caller rate limits)
 
   /** Owner and neighborhood payload that every listing row is returned with. */
   private get searchRelations() {
@@ -613,9 +664,52 @@ export class PropertiesService {
     };
   }
 
+
   /** Attach the computed trust score to each row. No neighborhood scores null. */
   private annotateTrustScore(rows: any[]): any[] {
     return rows.map((p) => ({
+
+      const filtered = annotated.filter((p: any) => {
+        const score = p.neighborhoodTrustScore;
+        if (
+          dto.minNeighborhoodTrustScore !== undefined &&
+          (score === null || score < dto.minNeighborhoodTrustScore)
+        )
+          return false;
+        if (
+          dto.maxNeighborhoodTrustScore !== undefined &&
+          (score === null || score > dto.maxNeighborhoodTrustScore)
+        )
+          return false;
+        return true;
+      });
+
+      const total = filtered.length;
+      const skip = (page - 1) * limit;
+      const items = filtered.slice(skip, skip + limit);
+
+      return { items, total, page, limit, totalPages: limit > 0 ? Math.ceil(total / limit) : 0 };
+    }
+
+    const skip = (page - 1) * limit;
+    const [rawItems, total] = await this.prisma.$transaction([
+      this.prisma.property.findMany({
+        where,
+        skip,
+        take: limit,
+        // `id` breaks ties so two rows with the same sort value cannot move
+        // between pages and be shown twice or not at all.
+        orderBy: [{ [sortBy]: sortOrder }, { id: sortOrder }],
+        include: {
+          owner: { select: { id: true, firstName: true, lastName: true, email: true } },
+          neighborhood: true,
+        },
+      }),
+      this.prisma.property.count({ where }),
+    ]);
+
+    const items = (rawItems as any[]).map((p) => ({
+ (feat(properties): Prometheus metrics, query optimisation, Redis caching, per-caller rate limits)
       ...p,
       neighborhoodTrustScore: p.neighborhood
         ? this.computeNeighborhoodTrustScore(p.neighborhood)
@@ -1053,6 +1147,8 @@ export class PropertiesService {
       throw new BadRequestException('Agent is already assigned to this property');
     }
 
+    await this.invalidateCachedProperty(propertyId);
+
     return this.prisma.propertyAgent.create({
       data: {
         propertyId,
@@ -1109,6 +1205,8 @@ export class PropertiesService {
       throw new NotFoundException('Agent assignment not found for this property');
     }
 
+    await this.invalidateCachedProperty(propertyId);
+
     return this.prisma.propertyAgent.update({
       where: {
         propertyId_agentId: {
@@ -1161,6 +1259,8 @@ export class PropertiesService {
     if (!assignment) {
       throw new NotFoundException('Agent assignment not found for this property');
     }
+
+    await this.invalidateCachedProperty(propertyId);
 
     return this.prisma.propertyAgent.delete({
       where: {
@@ -1215,6 +1315,7 @@ export class PropertiesService {
     if (!property) {
       throw new NotFoundException('Property not found');
     }
+    await this.invalidateCachedProperty(propertyId);
     return this.prisma.propertyAmenity.create({
       data: {
         propertyId,
@@ -1244,6 +1345,7 @@ export class PropertiesService {
     if (!amenity || amenity.propertyId !== propertyId) {
       throw new NotFoundException('Amenity not found for this property');
     }
+    await this.invalidateCachedProperty(propertyId);
     return this.prisma.propertyAmenity.update({
       where: { id: amenityId },
       data: {
@@ -1262,6 +1364,7 @@ export class PropertiesService {
     if (!amenity || amenity.propertyId !== propertyId) {
       throw new NotFoundException('Amenity not found for this property');
     }
+    await this.invalidateCachedProperty(propertyId);
     return this.prisma.propertyAmenity.delete({ where: { id: amenityId } });
   }
 }

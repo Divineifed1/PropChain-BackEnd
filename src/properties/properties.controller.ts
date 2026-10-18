@@ -9,6 +9,7 @@ import {
   Patch,
   Query,
   UseGuards,
+  UseInterceptors,
   Res,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   HttpStatus,
@@ -34,6 +35,7 @@ import {
 import { CreateAmenityDto, UpdateAmenityDto } from './dto/amenity.dto';
 import { PropertyReportService } from './report/property-report.service';
 import { Response } from 'express';
+
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -42,7 +44,16 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { PropertiesMetricsInterceptor } from './interceptors/properties-metrics.interceptor';
+import {
+  PropertiesRouteLimit,
+  PropertiesRouteRateLimitGuard,
+} from './guards/properties-route-rate-limit.guard';
+ (feat(properties): Prometheus metrics, query optimisation, Redis caching, per-caller rate limits)
+
 @ApiTags('Properties')
+@UseInterceptors(PropertiesMetricsInterceptor)
 @Controller('properties')
 export class PropertiesController {
   constructor(
@@ -51,7 +62,8 @@ export class PropertiesController {
   ) {}
 
   @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PropertiesRouteRateLimitGuard)
+  @PropertiesRouteLimit({ max: 30, windowMs: 60 * 60 * 1000 })
   @Post()
   create(@Body() createPropertyDto: CreatePropertyDto, @CurrentUser() user: AuthUserPayload) {
     return this.propertiesService.create(createPropertyDto, user.sub);
@@ -214,7 +226,8 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   }
 
   @ApiBearerAuth('access-token')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, PropertiesRouteRateLimitGuard)
+  @PropertiesRouteLimit({ max: 15, windowMs: 60 * 60 * 1000 })
   @Get(':id/report')
   async generateReport(@Param('id') id: string, @Res() res: Response): Promise<void> {
     try {
@@ -289,6 +302,8 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/status')
+  @UseGuards(PropertiesRouteRateLimitGuard)
+  @PropertiesRouteLimit({ max: 20, windowMs: 60 * 60 * 1000 })
   async bulkUpdatePropertyStatus(
     @Body() body: BulkPropertyStatusUpdateDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -301,6 +316,8 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/delete')
+  @UseGuards(PropertiesRouteRateLimitGuard)
+  @PropertiesRouteLimit({ max: 20, windowMs: 60 * 60 * 1000 })
   async bulkDeleteProperties(
     @Body() body: BulkPropertyDeleteDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -313,6 +330,8 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/export')
+  @UseGuards(PropertiesRouteRateLimitGuard)
+  @PropertiesRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
   async bulkExportProperties(
     @Body() body: BulkPropertyExportDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
