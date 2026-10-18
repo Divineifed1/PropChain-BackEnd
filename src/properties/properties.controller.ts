@@ -9,6 +9,7 @@ import {
   Patch,
   Query,
   UseGuards,
+  UseInterceptors,
   Res,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   HttpStatus,
@@ -35,6 +36,7 @@ import { CreateAmenityDto, UpdateAmenityDto } from './dto/amenity.dto';
 import { PropertyReportService } from './report/property-report.service';
 import { Response } from 'express';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ListingsMetricsInterceptor } from './interceptors/listings-metrics.interceptor';
 
 @ApiTags('Properties')
 @Controller('properties')
@@ -52,6 +54,7 @@ export class PropertiesController {
   }
 
   @Get()
+  @UseInterceptors(ListingsMetricsInterceptor)
   findAll() {
     return this.propertiesService.findAll();
   }
@@ -66,6 +69,7 @@ export class PropertiesController {
    * Defined before `:id` so the static path is matched first.
    */
   @Get('search')
+  @UseInterceptors(ListingsMetricsInterceptor)
   search(@Query() searchDto: SearchPropertiesDto) {
     return this.propertiesService.searchProperties(searchDto);
   }

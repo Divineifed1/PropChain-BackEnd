@@ -14,6 +14,7 @@ import { FraudModule } from '../fraud/fraud.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { PropertyReportService } from './report/property-report.service';
 import { CacheModuleConfig } from '../cache/cache.module';
+import { PropertiesListingsCacheService } from './properties-listings-cache.service';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CacheModuleConfig } from '../cache/cache.module';
     GeocodingService,
     PropertyExpiryService,
     PropertyReportService,
+    PropertiesListingsCacheService,
   ],
   exports: [
     PropertiesService,
@@ -39,6 +41,7 @@ import { CacheModuleConfig } from '../cache/cache.module';
     PropertyImagesService,
     GeocodingService,
     PropertyExpiryService,
+    PropertiesListingsCacheService,
   ],
 })
 export class PropertiesModule {}

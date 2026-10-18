@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { AppLogger } from '../common/logger';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -18,6 +19,7 @@ import { GeocodingService } from './geocoding.service';
 import { PropertyStatus, UserRole } from '../types/prisma.types';
 import { CacheService } from '../cache/cache.service';
 import { CACHE_TAGS } from '../cache/cache.config';
+import { PropertiesListingsCacheService } from './properties-listings-cache.service';
 import {
   canTransitionPropertyStatus,
   getAllowedNextPropertyStatuses,
@@ -51,6 +53,7 @@ export class PropertiesService {
     private readonly fraudService: FraudService,
     private readonly geocodingService: GeocodingService,
     private readonly cacheService: CacheService,
+    @Optional() private readonly listingsCache?: PropertiesListingsCacheService,
   ) {}
 
   private async checkGeocodeRateLimit(): Promise<boolean> {
@@ -580,6 +583,15 @@ export class PropertiesService {
    * Returns a paginated result so clients can render result counts and pages.
    */
   async searchProperties(dto: SearchPropertiesDto): Promise<PaginatedPropertiesResult> {
+    // Served from Redis when the module is wired with PropertiesListingsCacheService.
+    if (this.listingsCache) {
+      return this.listingsCache.rememberSearch(dto, () => this.runSearch(dto));
+    }
+    return this.runSearch(dto);
+  }
+
+  /** The search query itself, uncached. */
+  private async runSearch(dto: SearchPropertiesDto): Promise<PaginatedPropertiesResult> {
     const where = this.buildSearchWhereClause(dto);
 
     const page = dto.page && dto.page > 0 ? dto.page : 1;
