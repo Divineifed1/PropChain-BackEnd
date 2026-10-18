@@ -14,6 +14,9 @@ import { FraudModule } from '../fraud/fraud.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { PropertyReportService } from './report/property-report.service';
 import { CacheModuleConfig } from '../cache/cache.module';
+import { PropertiesHealthController } from './properties-health.controller';
+import { PropertiesHealthIndicator } from './properties-health.indicator';
+import { PropertyInjectionGuardPipe } from './pipes/injection-guard.pipe';
 
 @Module({
   imports: [
@@ -25,13 +28,21 @@ import { CacheModuleConfig } from '../cache/cache.module';
     DocumentsModule,
     NotificationsModule,
   ],
-  controllers: [PropertiesController, PropertyImagesController],
+  controllers: [
+    // Before PropertiesController: `GET /properties/health` must not match
+    // `GET /properties/:id`.
+    PropertiesHealthController,
+    PropertiesController,
+    PropertyImagesController,
+  ],
   providers: [
     PropertiesService,
     PropertyImagesService,
     GeocodingService,
     PropertyExpiryService,
     PropertyReportService,
+    PropertiesHealthIndicator,
+    PropertyInjectionGuardPipe,
   ],
   exports: [
     PropertiesService,

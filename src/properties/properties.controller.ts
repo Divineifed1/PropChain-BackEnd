@@ -9,6 +9,7 @@ import {
   Patch,
   Query,
   UseGuards,
+  UsePipes,
   Res,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   HttpStatus,
@@ -34,9 +35,17 @@ import {
 import { CreateAmenityDto, UpdateAmenityDto } from './dto/amenity.dto';
 import { PropertyReportService } from './report/property-report.service';
 import { Response } from 'express';
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { PropertiesTraceInterceptor } from './interceptors/properties-trace.interceptor';
+import { PropertyInjectionGuardPipe } from './pipes/injection-guard.pipe';
+import {
+  PROPERTIES_DEFAULT_PAGE_SIZE,
+  PropertiesPaginationQueryDto,
+  buildPropertiesPageMeta,
+} from './dto/pagination-query.dto';
 
 @ApiTags('Properties')
+@UseInterceptors(PropertiesTraceInterceptor)
 @Controller('properties')
 export class PropertiesController {
   constructor(
@@ -47,13 +56,42 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Post()
+  @UsePipes(PropertyInjectionGuardPipe)
   create(@Body() createPropertyDto: CreatePropertyDto, @CurrentUser() user: AuthUserPayload) {
     return this.propertiesService.create(createPropertyDto, user.sub);
   }
 
+  /**
+   * Public listing feed.
+   *
+   * Without `page`/`limit` this returns the plain array it has always returned,
+   * so existing clients are unaffected. With either parameter the response becomes
+   * `{ data, meta: { page, limit, total, totalPages, hasNext } }`.
+   */
   @Get()
-  findAll() {
-    return this.propertiesService.findAll();
+  @ApiOperation({ summary: 'List published property listings', operationId: 'listProperties' })
+  @ApiQuery({ name: 'page', required: false, minimum: 1, description: '1-based page number.' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    minimum: 1,
+    maximum: 100,
+    description: `Rows per page (default ${PROPERTIES_DEFAULT_PAGE_SIZE}).`,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'The listings, or a page of them when page/limit is supplied',
+  })
+  @ApiResponse({ status: 400, description: 'page or limit outside the accepted range' })
+  async findAll(@Query() query: PropertiesPaginationQueryDto = {}) {
+    const wantsPage = query.page !== undefined || query.limit !== undefined;
+    if (!wantsPage) return this.propertiesService.findAll();
+
+    const page = query.page ?? 1;
+    const limit = query.limit ?? PROPERTIES_DEFAULT_PAGE_SIZE;
+    const { items, total } = await this.propertiesService.findAllPaginated(page, limit);
+
+    return { data: items, meta: buildPropertiesPageMeta(page, limit, total) };
   }
 
   /**
@@ -66,6 +104,7 @@ export class PropertiesController {
    * Defined before `:id` so the static path is matched first.
    */
   @Get('search')
+  @UsePipes(PropertyInjectionGuardPipe)
   search(@Query() searchDto: SearchPropertiesDto) {
     return this.propertiesService.searchProperties(searchDto);
   }
@@ -82,6 +121,7 @@ export class PropertiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.AGENT, UserRole.ADMIN)
   @Put(':id')
+  @UsePipes(PropertyInjectionGuardPipe)
   update(
     @Param('id') id: string,
     @Body() updatePropertyDto: UpdatePropertyDto,
@@ -149,6 +189,7 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Patch(':id/status')
+  @UsePipes(PropertyInjectionGuardPipe)
   transitionStatus(
     @Param('id') id: string,
     @Body() dto: TransitionPropertyStatusDto,
@@ -182,6 +223,7 @@ export class PropertiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/status')
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkUpdatePropertyStatus(
     @Body() body: BulkPropertyStatusUpdateDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -194,6 +236,7 @@ export class PropertiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/delete')
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkDeleteProperties(
     @Body() body: BulkPropertyDeleteDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -206,6 +249,7 @@ export class PropertiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/export')
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkExportProperties(
     @Body() body: BulkPropertyExportDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -217,6 +261,7 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Post(':id/agents')
+  @UsePipes(PropertyInjectionGuardPipe)
   async assignAgent(
     @Param('id') propertyId: string,
     @Body() dto: AssignAgentDto,
@@ -228,6 +273,7 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Put(':id/agents/:agentId')
+  @UsePipes(PropertyInjectionGuardPipe)
   async updateAgentAssignment(
     @Param('id') propertyId: string,
     @Param('agentId') agentId: string,
@@ -258,6 +304,7 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Post(':id/amenities')
+  @UsePipes(PropertyInjectionGuardPipe)
   async addAmenity(@Param('id') propertyId: string, @Body() dto: CreateAmenityDto) {
     return this.propertiesService.addAmenity(propertyId, dto);
   }
@@ -270,6 +317,7 @@ export class PropertiesController {
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
   @Patch(':id/amenities/:amenityId')
+  @UsePipes(PropertyInjectionGuardPipe)
   async updateAmenity(
     @Param('id') propertyId: string,
     @Param('amenityId') amenityId: string,

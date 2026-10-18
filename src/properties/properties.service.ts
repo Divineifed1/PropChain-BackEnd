@@ -239,39 +239,74 @@ export class PropertiesService {
 
   async findAll(params?: FindAllParams) {
     const { skip, take, where, orderBy } = params || {};
-    const finalWhere = where
-      ? { ...where, status: where.status ?? PropertyStatus.ACTIVE, deleted: false }
-      : { status: PropertyStatus.ACTIVE, deleted: false };
-
     return (this.prisma.property as any).findMany({
       skip,
       take,
-      where: finalWhere,
+      where: this.buildListingWhere(where),
       orderBy,
-      include: {
-        owner: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
+      include: this.listingRelations,
+    });
+  }
+
+  /**
+   * `GET /properties` with paging. Returns the rows and the total that matches
+   * the same filter, so a client can render "page 2 of 7" without a second
+   * request. `findAll` is left as-is for callers that just want the rows.
+   */
+  async findAllPaginated(
+    page: number,
+    limit: number,
+    params?: Omit<FindAllParams, 'skip' | 'take'>,
+  ): Promise<{ items: unknown[]; total: number }> {
+    const where = this.buildListingWhere(params?.where);
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await this.prisma.$transaction([
+      (this.prisma.property as any).findMany({
+        skip,
+        take: limit,
+        where,
+        orderBy: params?.orderBy,
+        include: this.listingRelations,
+      }),
+      this.prisma.property.count({ where }),
+    ]);
+
+    return { items, total };
+  }
+
+  /** The public listing filter: never soft-deleted, and ACTIVE unless overridden. */
+  private buildListingWhere(where?: Record<string, unknown>): Record<string, unknown> {
+    return where
+      ? { ...where, status: where.status ?? PropertyStatus.ACTIVE, deleted: false }
+      : { status: PropertyStatus.ACTIVE, deleted: false };
+  }
+
+  /** Owner and assigned-agent payload shared by every listing read. */
+  private get listingRelations() {
+    return {
+      owner: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
         },
-        agents: {
-          include: {
-            agent: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-                phone: true,
-              },
+      },
+      agents: {
+        include: {
+          agent: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
             },
           },
         },
       },
-    });
+    };
   }
 
   async findOne(id: string) {
