@@ -14,6 +14,9 @@ import { FraudModule } from '../fraud/fraud.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { PropertyReportService } from './report/property-report.service';
 import { CacheModuleConfig } from '../cache/cache.module';
+import { PropertiesCacheService } from './properties-cache.service';
+import { PropertiesRouteRateLimitGuard } from './guards/properties-route-rate-limit.guard';
+import { RateLimitService } from '../auth/rate-limit.service';
 
 @Module({
   imports: [
@@ -32,6 +35,9 @@ import { CacheModuleConfig } from '../cache/cache.module';
     GeocodingService,
     PropertyExpiryService,
     PropertyReportService,
+    PropertiesCacheService,
+    RateLimitService,
+    PropertiesRouteRateLimitGuard,
   ],
   exports: [
     PropertiesService,
@@ -39,6 +45,7 @@ import { CacheModuleConfig } from '../cache/cache.module';
     PropertyImagesService,
     GeocodingService,
     PropertyExpiryService,
+    PropertiesCacheService,
   ],
 })
 export class PropertiesModule {}
