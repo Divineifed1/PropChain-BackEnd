@@ -15,6 +15,9 @@ import { DocumentsModule } from '../documents/documents.module';
 import { PropertyReportService } from './report/property-report.service';
 import { CacheModuleConfig } from '../cache/cache.module';
 import { PropertiesListingsCacheService } from './properties-listings-cache.service';
+import { PropertiesCacheService } from './properties-cache.service';
+import { PropertiesRouteRateLimitGuard } from './guards/properties-route-rate-limit.guard';
+import { RateLimitService } from '../auth/rate-limit.service';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { PropertiesListingsCacheService } from './properties-listings-cache.serv
     PropertyExpiryService,
     PropertyReportService,
     PropertiesListingsCacheService,
+    PropertiesCacheService,
+    RateLimitService,
+    PropertiesRouteRateLimitGuard,
   ],
   exports: [
     PropertiesService,
@@ -42,6 +48,7 @@ import { PropertiesListingsCacheService } from './properties-listings-cache.serv
     GeocodingService,
     PropertyExpiryService,
     PropertiesListingsCacheService,
+    PropertiesCacheService,
   ],
 })
 export class PropertiesModule {}
