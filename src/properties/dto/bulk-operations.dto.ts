@@ -47,6 +47,7 @@ export class BulkPropertyExportDto {
   @ApiPropertyOptional({
     description: 'Only export listings whose title contains this text.',
   })
+  @Transform(TrimListingQuery)
   @IsOptional()
   @IsString()
   filter?: string;
