@@ -6,7 +6,14 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AUTH_DEFAULT_PAGE_SIZE, AuthPaginationQueryDto, buildPageMeta } from './dto/pagination-query.dto';
+import { AppLogger } from '../common/logger';
+import { AuthCacheService, AUTH_DASHBOARD_TTL_SECONDS } from './auth-cache.service';
+import { retryWithBackoff, TransientError } from './retry.util';
+import {
+  AUTH_DEFAULT_PAGE_SIZE,
+  AuthPaginationQueryDto,
+  buildPageMeta,
+} from './dto/pagination-query.dto';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, BlacklistedToken, Document, ApiKey } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -757,8 +764,10 @@ export class AuthService {
    */
   async getDashboard(user: AuthUserPayload) {
     if (!this.authCache) return this.loadDashboard(user);
-    return this.authCache.remember(this.authCache.dashboardKey(user.sub), AUTH_DASHBOARD_TTL_SECONDS, () =>
-      this.loadDashboard(user),
+    return this.authCache.remember(
+      this.authCache.dashboardKey(user.sub),
+      AUTH_DASHBOARD_TTL_SECONDS,
+      () => this.loadDashboard(user),
     );
   }
 
@@ -772,61 +781,60 @@ export class AuthService {
     }
 
     // The recent-properties list was fetched here but never used, so it is no longer queried.
-    const [buyerTransactions, sellerTransactions, documents, apiKeysCount] =
-      await Promise.all([
-        this.prisma.transaction.findMany({
-          where: { buyerId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          include: {
-            property: {
-              select: {
-                id: true,
-                title: true,
-                address: true,
-                city: true,
-                state: true,
-                price: true,
-              },
-            },
-            seller: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
+    const [buyerTransactions, sellerTransactions, documents, apiKeysCount] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { buyerId: user.sub },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          property: {
+            select: {
+              id: true,
+              title: true,
+              address: true,
+              city: true,
+              state: true,
+              price: true,
             },
           },
-        }),
-        this.prisma.transaction.findMany({
-          where: { sellerId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-          include: {
-            property: {
-              select: {
-                id: true,
-                title: true,
-                address: true,
-                city: true,
-                state: true,
-                price: true,
-              },
-            },
-            buyer: {
-              select: {
-                firstName: true,
-                lastName: true,
-              },
+          seller: {
+            select: {
+              firstName: true,
+              lastName: true,
             },
           },
-        }),
-        this.prisma.document.findMany({
-          where: { userId: user.sub },
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        }),
-        this.prisma.apiKey.count({ where: { userId: user.sub } }),
-      ]);
+        },
+      }),
+      this.prisma.transaction.findMany({
+        where: { sellerId: user.sub },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: {
+          property: {
+            select: {
+              id: true,
+              title: true,
+              address: true,
+              city: true,
+              state: true,
+              price: true,
+            },
+          },
+          buyer: {
+            select: {
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      }),
+      this.prisma.document.findMany({
+        where: { userId: user.sub },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+      this.prisma.apiKey.count({ where: { userId: user.sub } }),
+    ]);
 
     const [
       totalProperties,
@@ -927,7 +935,9 @@ export class AuthService {
     recentHashes: string[],
     historyLimit: number,
   ): Promise<void> {
-    const reused = await Promise.all(recentHashes.map((hash) => comparePassword(newPassword, hash)));
+    const reused = await Promise.all(
+      recentHashes.map((hash) => comparePassword(newPassword, hash)),
+    );
     if (reused.some(Boolean)) {
       throw new BadRequestException(
         `Password reuse is not allowed for the last ${historyLimit} passwords`,
@@ -1786,7 +1796,12 @@ export class AuthService {
         data: { usedAt: new Date() },
       });
 
-      await this.recordPasswordHistory(tx, resetToken.userId, newPasswordHash, passwordHistoryLimit);
+      await this.recordPasswordHistory(
+        tx,
+        resetToken.userId,
+        newPasswordHash,
+        passwordHistoryLimit,
+      );
     });
 
     await this.sessionsService.revokeAllSessions(resetToken.userId);
@@ -1996,6 +2011,9 @@ export class AuthService {
         this.logger.error('Failed to queue verification email:', err?.message || err);
       });
 
-    this.logger.log('Verification email resent', { event: 'auth.verification_resent', userId: user.id });
+    this.logger.log('Verification email resent', {
+      event: 'auth.verification_resent',
+      userId: user.id,
+    });
   }
 }

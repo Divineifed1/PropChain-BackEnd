@@ -334,7 +334,7 @@ describe('PropertiesService', () => {
       const result = await service.searchProperties({ minNeighborhoodTrustScore: 50 } as never);
 
       expect(prisma.$transaction).not.toHaveBeenCalled();
-      expect(result.items.map((i: { id: string }) => i.id)).toEqual(['high']);
+      expect(result.items.map((i) => (i as { id: string }).id)).toEqual(['high']);
       expect(result.total).toBe(1);
     });
 

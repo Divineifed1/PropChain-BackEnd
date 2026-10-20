@@ -176,18 +176,18 @@ describe('BackwardCompatibilityService', () => {
 
       it('should transform arrays of V2 data to V1', () => {
         const v2Users = [
-          { 
-            id: 1, 
-            name: 'John', 
+          {
+            id: 1,
+            name: 'John',
             email: 'john@example.com',
             role: 'USER',
             isActive: true,
             createdAt: '2026-01-01',
             trustScore: 85,
           },
-          { 
-            id: 2, 
-            name: 'Jane', 
+          {
+            id: 2,
+            name: 'Jane',
             email: 'jane@example.com',
             role: 'AGENT',
             isActive: true,
@@ -269,34 +269,42 @@ describe('BackwardCompatibilityService', () => {
       expect(service.fieldExistsInVersion('email', ApiVersionEnum.V1, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('role', ApiVersionEnum.V1, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('isActive', ApiVersionEnum.V1, 'user')).toBe(true);
-      
+
       // V2-only user fields
       expect(service.fieldExistsInVersion('createdAt', ApiVersionEnum.V2, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('updatedAt', ApiVersionEnum.V2, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('trustScore', ApiVersionEnum.V2, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('emailVerified', ApiVersionEnum.V2, 'user')).toBe(true);
       expect(service.fieldExistsInVersion('lastLoginAt', ApiVersionEnum.V2, 'user')).toBe(true);
-      
+
       // Property fields
       expect(service.fieldExistsInVersion('id', ApiVersionEnum.V1, 'property')).toBe(true);
       expect(service.fieldExistsInVersion('address', ApiVersionEnum.V2, 'property')).toBe(true);
       expect(service.fieldExistsInVersion('price', ApiVersionEnum.V1, 'property')).toBe(true);
       expect(service.fieldExistsInVersion('status', ApiVersionEnum.V1, 'property')).toBe(true);
-      
+
       // V2-only property fields
       expect(service.fieldExistsInVersion('createdAt', ApiVersionEnum.V2, 'property')).toBe(true);
       expect(service.fieldExistsInVersion('verified', ApiVersionEnum.V2, 'property')).toBe(true);
       expect(service.fieldExistsInVersion('trustScore', ApiVersionEnum.V2, 'property')).toBe(true);
-      expect(service.fieldExistsInVersion('squareFootage', ApiVersionEnum.V2, 'property')).toBe(true);
-      
+      expect(service.fieldExistsInVersion('squareFootage', ApiVersionEnum.V2, 'property')).toBe(
+        true,
+      );
+
       // Transaction fields
       expect(service.fieldExistsInVersion('id', ApiVersionEnum.V1, 'transaction')).toBe(true);
-      expect(service.fieldExistsInVersion('propertyId', ApiVersionEnum.V2, 'transaction')).toBe(true);
+      expect(service.fieldExistsInVersion('propertyId', ApiVersionEnum.V2, 'transaction')).toBe(
+        true,
+      );
       expect(service.fieldExistsInVersion('status', ApiVersionEnum.V1, 'transaction')).toBe(true);
-      
+
       // V2-only transaction fields
-      expect(service.fieldExistsInVersion('blockchainHash', ApiVersionEnum.V2, 'transaction')).toBe(true);
-      expect(service.fieldExistsInVersion('escrowStatus', ApiVersionEnum.V2, 'transaction')).toBe(true);
+      expect(service.fieldExistsInVersion('blockchainHash', ApiVersionEnum.V2, 'transaction')).toBe(
+        true,
+      );
+      expect(service.fieldExistsInVersion('escrowStatus', ApiVersionEnum.V2, 'transaction')).toBe(
+        true,
+      );
     });
 
     it('should return false for fields that do not exist in the specified version', () => {
@@ -305,9 +313,15 @@ describe('BackwardCompatibilityService', () => {
       expect(service.fieldExistsInVersion('trustScore', ApiVersionEnum.V1, 'user')).toBe(false);
       expect(service.fieldExistsInVersion('emailVerified', ApiVersionEnum.V1, 'user')).toBe(false);
       expect(service.fieldExistsInVersion('verified', ApiVersionEnum.V1, 'property')).toBe(false);
-      expect(service.fieldExistsInVersion('squareFootage', ApiVersionEnum.V1, 'property')).toBe(false);
-      expect(service.fieldExistsInVersion('blockchainHash', ApiVersionEnum.V1, 'transaction')).toBe(false);
-      expect(service.fieldExistsInVersion('escrowStatus', ApiVersionEnum.V1, 'transaction')).toBe(false);
+      expect(service.fieldExistsInVersion('squareFootage', ApiVersionEnum.V1, 'property')).toBe(
+        false,
+      );
+      expect(service.fieldExistsInVersion('blockchainHash', ApiVersionEnum.V1, 'transaction')).toBe(
+        false,
+      );
+      expect(service.fieldExistsInVersion('escrowStatus', ApiVersionEnum.V1, 'transaction')).toBe(
+        false,
+      );
     });
 
     it('should return false for unknown entity types or fields', () => {
@@ -372,7 +386,11 @@ describe('BackwardCompatibilityService', () => {
         amenities: ['pool', 'garage'],
       };
 
-      const filteredForV1 = service.filterFieldsByVersion(propertyData, ApiVersionEnum.V1, 'property');
+      const filteredForV1 = service.filterFieldsByVersion(
+        propertyData,
+        ApiVersionEnum.V1,
+        'property',
+      );
 
       expect(filteredForV1).toEqual({
         id: 1,
@@ -393,7 +411,11 @@ describe('BackwardCompatibilityService', () => {
       expect(filteredForV1).not.toHaveProperty('yearBuilt');
       expect(filteredForV1).not.toHaveProperty('amenities');
 
-      const filteredForV2 = service.filterFieldsByVersion(propertyData, ApiVersionEnum.V2, 'property');
+      const filteredForV2 = service.filterFieldsByVersion(
+        propertyData,
+        ApiVersionEnum.V2,
+        'property',
+      );
       expect(filteredForV2).toEqual(propertyData);
     });
 
@@ -415,7 +437,11 @@ describe('BackwardCompatibilityService', () => {
         updatedAt: '2026-01-02',
       };
 
-      const filteredForV1 = service.filterFieldsByVersion(transactionData, ApiVersionEnum.V1, 'transaction');
+      const filteredForV1 = service.filterFieldsByVersion(
+        transactionData,
+        ApiVersionEnum.V1,
+        'transaction',
+      );
 
       expect(filteredForV1).toEqual({
         id: 'tx-123',
@@ -434,7 +460,11 @@ describe('BackwardCompatibilityService', () => {
       expect(filteredForV1).not.toHaveProperty('auditLog');
       expect(filteredForV1).not.toHaveProperty('updatedAt');
 
-      const filteredForV2 = service.filterFieldsByVersion(transactionData, ApiVersionEnum.V2, 'transaction');
+      const filteredForV2 = service.filterFieldsByVersion(
+        transactionData,
+        ApiVersionEnum.V2,
+        'transaction',
+      );
       expect(filteredForV2).toEqual(transactionData);
     });
   });

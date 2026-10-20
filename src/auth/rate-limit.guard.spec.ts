@@ -168,7 +168,10 @@ describe('RateLimitGuard - authenticated tier-based limiting', () => {
     });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
     expect(rateLimitService.checkUserRateLimit).toHaveBeenCalledWith('user-1', 'premium');
-    expect(rateLimitService.checkUserIpRateLimit).toHaveBeenCalledWith('user-1', createSha256('1.2.3.4'));
+    expect(rateLimitService.checkUserIpRateLimit).toHaveBeenCalledWith(
+      'user-1',
+      createSha256('1.2.3.4'),
+    );
     expect(rateLimitService.checkIpRateLimit).not.toHaveBeenCalled();
   });
 

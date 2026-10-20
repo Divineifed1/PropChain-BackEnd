@@ -23,7 +23,8 @@ export class UserInjectionGuardPipe implements PipeTransform {
   private inspect(node: unknown, depth: number, path: string): void {
     if (depth > MAX_DEPTH) throw new BadRequestException('Request is nested too deeply');
     if (typeof node === 'string') {
-      if (node.includes('\0')) throw new BadRequestException(`Invalid characters in ${path || 'value'}`);
+      if (node.includes('\0'))
+        throw new BadRequestException(`Invalid characters in ${path || 'value'}`);
       if (/^(q|email|name)$/.test(path) && SQL_MARKERS.test(node)) {
         throw new BadRequestException(`Invalid characters in ${path}`);
       }

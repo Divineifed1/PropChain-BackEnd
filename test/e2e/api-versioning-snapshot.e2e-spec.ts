@@ -1,10 +1,10 @@
 /**
  * API Versioning Snapshot Tests
- * 
+ *
  * These tests freeze v1 response shapes to ensure backward compatibility
  * until the v1 sunset date (2026-12-31). Any changes to v1 responses
  * will cause these tests to fail, preventing accidental breaking changes.
- * 
+ *
  * To update snapshots after intentional changes:
  *   npm test -- test/e2e/api-versioning-snapshot.e2e-spec.ts -u
  */
@@ -28,21 +28,17 @@ describe('API Versioning Snapshot Tests', () => {
     await app.init();
 
     // Create a test user and get auth token for authenticated endpoints
-    const registerResponse = await request(app.getHttpServer())
-      .post('/api/v1/auth/register')
-      .send({
-        email: 'versioning-test@example.com',
-        password: 'SecurePassword123!',
-        name: 'Versioning Test User',
-      });
+    const registerResponse = await request(app.getHttpServer()).post('/api/v1/auth/register').send({
+      email: 'versioning-test@example.com',
+      password: 'SecurePassword123!',
+      name: 'Versioning Test User',
+    });
 
     if (registerResponse.status === 201) {
-      const loginResponse = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send({
-          email: 'versioning-test@example.com',
-          password: 'SecurePassword123!',
-        });
+      const loginResponse = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+        email: 'versioning-test@example.com',
+        password: 'SecurePassword123!',
+      });
 
       if (loginResponse.status === 200) {
         authToken = loginResponse.body.accessToken;
@@ -56,13 +52,11 @@ describe('API Versioning Snapshot Tests', () => {
 
   describe('Authentication Endpoints - v1', () => {
     it('POST /api/v1/auth/register - should match frozen v1 response', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/auth/register')
-        .send({
-          email: 'snapshot-test@example.com',
-          password: 'SecurePassword123!',
-          name: 'Snapshot Test User',
-        });
+      const response = await request(app.getHttpServer()).post('/api/v1/auth/register').send({
+        email: 'snapshot-test@example.com',
+        password: 'SecurePassword123!',
+        name: 'Snapshot Test User',
+      });
 
       expect(response.status).toBe(201);
       expect(response.body).toMatchSnapshot({
@@ -74,12 +68,10 @@ describe('API Versioning Snapshot Tests', () => {
     });
 
     it('POST /api/v1/auth/login - should match frozen v1 response', async () => {
-      const response = await request(app.getHttpServer())
-        .post('/api/v1/auth/login')
-        .send({
-          email: 'versioning-test@example.com',
-          password: 'SecurePassword123!',
-        });
+      const response = await request(app.getHttpServer()).post('/api/v1/auth/login').send({
+        email: 'versioning-test@example.com',
+        password: 'SecurePassword123!',
+      });
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchSnapshot({
@@ -95,7 +87,6 @@ describe('API Versioning Snapshot Tests', () => {
 
     it('GET /api/v1/auth/me - should match frozen v1 response', async () => {
       if (!authToken) {
-        console.warn('Skipping authenticated test - no auth token available');
         return;
       }
 
@@ -115,7 +106,6 @@ describe('API Versioning Snapshot Tests', () => {
   describe('User Endpoints - v1', () => {
     it('GET /api/v1/users/me/profile - should match frozen v1 response', async () => {
       if (!authToken) {
-        console.warn('Skipping authenticated test - no auth token available');
         return;
       }
 
@@ -134,14 +124,11 @@ describe('API Versioning Snapshot Tests', () => {
 
   describe('Properties Endpoints - v1', () => {
     it('GET /api/v1/properties - should match frozen v1 response', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/properties');
+      const response = await request(app.getHttpServer()).get('/api/v1/properties');
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchSnapshot({
-        // Expect array, but freeze structure
-        expect.any(Array),
-      });
+      // Expect array, but freeze structure
+      expect(response.body).toMatchSnapshot();
     });
 
     it('GET /api/v1/properties/search - should match frozen v1 response', async () => {
@@ -150,16 +137,13 @@ describe('API Versioning Snapshot Tests', () => {
         .query({ city: 'San Francisco' });
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchSnapshot({
-        expect.any(Array),
-      });
+      expect(response.body).toMatchSnapshot();
     });
   });
 
   describe('Transactions Endpoints - v1', () => {
     it('GET /api/v1/transactions - should match frozen v1 response', async () => {
       if (!authToken) {
-        console.warn('Skipping authenticated test - no auth token available');
         return;
       }
 
@@ -184,16 +168,13 @@ describe('API Versioning Snapshot Tests', () => {
         .query({ q: 'test' });
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchSnapshot({
-        expect.any(Array),
-      });
+      expect(response.body).toMatchSnapshot();
     });
   });
 
   describe('Dashboard Endpoints - v1', () => {
     it('GET /api/v1/dashboard - should match frozen v1 response', async () => {
       if (!authToken) {
-        console.warn('Skipping authenticated test - no auth token available');
         return;
       }
 
@@ -202,21 +183,17 @@ describe('API Versioning Snapshot Tests', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toMatchSnapshot({
-        // Freeze dashboard structure
-        expect.any(Object),
-      });
+      // Freeze dashboard structure
+      expect(response.body).toMatchSnapshot();
     });
   });
 
   describe('Version Drift Detection', () => {
     it('v1 and v2 responses should have documented differences', async () => {
       // Test properties endpoint for version drift
-      const v1Response = await request(app.getHttpServer())
-        .get('/api/v1/properties');
+      const v1Response = await request(app.getHttpServer()).get('/api/v1/properties');
 
-      const v2Response = await request(app.getHttpServer())
-        .get('/api/v2/properties');
+      const v2Response = await request(app.getHttpServer()).get('/api/v2/properties');
 
       expect(v1Response.status).toBe(200);
       expect(v2Response.status).toBe(200);
@@ -227,22 +204,15 @@ describe('API Versioning Snapshot Tests', () => {
       const v2Keys = v2Response.body.length > 0 ? Object.keys(v2Response.body[0]) : [];
 
       // v2 should have all v1 fields plus potentially more
-      v1Keys.forEach(key => {
+      v1Keys.forEach((key) => {
         expect(v2Keys).toContain(key);
       });
-
-      // Log any new fields in v2 for documentation
-      const newFields = v2Keys.filter(key => !v1Keys.includes(key));
-      if (newFields.length > 0) {
-        console.log(`v2 has additional fields compared to v1: ${newFields.join(', ')}`);
-      }
     });
   });
 
   describe('Version Headers', () => {
     it('v1 requests should return deprecation headers', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v1/properties');
+      const response = await request(app.getHttpServer()).get('/api/v1/properties');
 
       expect(response.status).toBe(200);
       expect(response.headers['api-version']).toBe('v1');
@@ -252,8 +222,7 @@ describe('API Versioning Snapshot Tests', () => {
     });
 
     it('v2 requests should return active status headers', async () => {
-      const response = await request(app.getHttpServer())
-        .get('/api/v2/properties');
+      const response = await request(app.getHttpServer()).get('/api/v2/properties');
 
       expect(response.status).toBe(200);
       expect(response.headers['api-version']).toBe('v2');

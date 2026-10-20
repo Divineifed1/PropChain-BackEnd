@@ -1,7 +1,11 @@
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { usersOutcomeForStatus, usersRequestDurationSeconds, usersRequestsTotal } from '../users-metrics';
+import {
+  usersOutcomeForStatus,
+  usersRequestDurationSeconds,
+  usersRequestsTotal,
+} from '../users-metrics';
 
 /** Records `users_requests_total` and `users_request_duration_seconds` for each handler call. */
 @Injectable()

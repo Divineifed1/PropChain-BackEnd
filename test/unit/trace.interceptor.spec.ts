@@ -186,7 +186,9 @@ describe('TraceInterceptor', () => {
     beforeEach(() => {
       process.env = { ...originalEnv };
       loggerLogSpy = jest.spyOn((interceptor as any).logger, 'log').mockImplementation(() => {});
-      loggerErrorSpy = jest.spyOn((interceptor as any).logger, 'error').mockImplementation(() => {});
+      loggerErrorSpy = jest
+        .spyOn((interceptor as any).logger, 'error')
+        .mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -203,7 +205,10 @@ describe('TraceInterceptor', () => {
         .subscribe({
           next: () => {
             expect(loggerLogSpy).not.toHaveBeenCalled();
-            expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Trace-Id', 'unsampled-fast-trace');
+            expect(mockResponse.setHeader).toHaveBeenCalledWith(
+              'X-Trace-Id',
+              'unsampled-fast-trace',
+            );
             done();
           },
           error: done,
@@ -231,7 +236,9 @@ describe('TraceInterceptor', () => {
           next: () => {
             // start log was not sampled, but completed log was emitted because duration was 100ms > 50ms
             expect(loggerLogSpy).toHaveBeenCalledWith(
-              expect.stringContaining('[slow-trace-id] TestController.testHandler - completed (100ms)'),
+              expect.stringContaining(
+                '[slow-trace-id] TestController.testHandler - completed (100ms)',
+              ),
             );
             Date.now = realDateNow;
             done();

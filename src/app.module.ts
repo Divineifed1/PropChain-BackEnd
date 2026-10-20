@@ -46,7 +46,6 @@ import { HealthModule } from './health/health.module';
 import { InvestmentsModule } from './investments/investments.module';
 // Issue #919 – Data archival strategy
 import { ArchiveModule } from './archive/archive.module';
-import { ListingsModule } from './listings/listings.module';
 // Issue #920 – Automated cleanup of expired records
 import { CleanupService } from './database/cleanup.service';
 // Issue #964 – Localized error messages with i18n

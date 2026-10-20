@@ -293,7 +293,10 @@ export class DataExportService {
 
     await this.emailService.sendEmail({
       to: user.email,
-      subject: subject === 'email.data_export_ready_subject' ? 'Your PropChain data export is ready' : subject,
+      subject:
+        subject === 'email.data_export_ready_subject'
+          ? 'Your PropChain data export is ready'
+          : subject,
       html: `<p>${greeting}</p>
         <p>${body}</p>
         <p><a href="${downloadHint}">${downloadHint}</a></p>
@@ -310,7 +313,11 @@ export class DataExportService {
   /**
    * Re-send completion email for an already COMPLETED job (issue #1230).
    */
-  async resendCompletionEmail(jobId: string, userId: string, language?: string | null): Promise<void> {
+  async resendCompletionEmail(
+    jobId: string,
+    userId: string,
+    language?: string | null,
+  ): Promise<void> {
     const job = await this.prisma.exportJob.findUnique({ where: { id: jobId } });
     if (!job || job.status !== 'COMPLETED' || !job.fileUrl) {
       throw new NotFoundException(`Export job ${jobId} is not available for notification`);
@@ -318,4 +325,3 @@ export class DataExportService {
     await this.sendCompletionEmail(userId, job.id, job.fileUrl, asLang(language));
   }
 }
-

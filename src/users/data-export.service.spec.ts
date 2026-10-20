@@ -143,7 +143,9 @@ describe('DataExportService', () => {
     try {
       await fs.unlink(result.filePath);
       await fs.unlink(`${result.filePath}.json`);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     expect(order.indexOf('job-updated:COMPLETED')).toBeGreaterThanOrEqual(0);
     expect(order.indexOf('email-sent')).toBeGreaterThan(order.indexOf('job-updated:COMPLETED'));
     expect(harness.email.sendEmail).toHaveBeenCalledWith(
@@ -153,5 +155,4 @@ describe('DataExportService', () => {
       }),
     );
   });
-
 });

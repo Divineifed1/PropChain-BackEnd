@@ -156,7 +156,9 @@ describe('AuthController (integration)', () => {
     });
 
     it('rejects a missing name with 400', async () => {
-      const { firstName: _omit, ...withoutName } = valid;
+      // `firstName` is deliberately stripped: its absence is what must trigger the 400.
+      const withoutName: Record<string, unknown> = { ...valid };
+      delete withoutName.firstName;
       await request(app.getHttpServer()).post('/auth/register').send(withoutName).expect(400);
     });
   });
@@ -171,7 +173,9 @@ describe('AuthController (integration)', () => {
         .expect(201);
 
       // The user agent depends on the HTTP client, so only the DTO is asserted.
-      expect(authService.refreshToken.mock.calls[0][0]).toMatchObject({ refreshToken: 'old-token' });
+      expect(authService.refreshToken.mock.calls[0][0]).toMatchObject({
+        refreshToken: 'old-token',
+      });
     });
 
     it('requires a refresh token', async () => {

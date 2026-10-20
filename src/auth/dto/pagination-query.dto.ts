@@ -24,7 +24,11 @@ export interface PaginatedResult<T> {
   meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean };
 }
 
-export function buildPageMeta(page: number, limit: number, total: number): PaginatedResult<never>['meta'] {
+export function buildPageMeta(
+  page: number,
+  limit: number,
+  total: number,
+): PaginatedResult<never>['meta'] {
   const totalPages = Math.max(1, Math.ceil(total / limit));
   return { page, limit, total, totalPages, hasNext: page < totalPages };
 }

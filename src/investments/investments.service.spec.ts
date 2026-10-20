@@ -1,27 +1,45 @@
-import { BadRequestException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { InvestmentsService } from './investments.service';
+import { PrismaService } from '../database/prisma.service';
 
 describe('InvestmentsService', () => {
   let service: InvestmentsService;
 
+  const prisma = {
+    property: { findUnique: jest.fn() },
+    $queryRaw: jest.fn(),
+  };
+
   beforeEach(() => {
-    service = new InvestmentsService();
+    jest.clearAllMocks();
+    service = new InvestmentsService(prisma as unknown as PrismaService);
   });
 
-  it('calculates a positive ROI', () => {
-    expect(service.calculateRoi(1000, 1200)).toEqual({
-      amountInvested: 1000,
-      currentValue: 1200,
-      profit: 200,
-      roiPercent: 20,
-    });
+  it('returns the investment metrics for a property', async () => {
+    const metrics = { id: 'p1', capRate: 5, roi: 12, rentalYield: 4, cashFlow: 900 };
+    prisma.property.findUnique.mockResolvedValue(metrics);
+
+    await expect(service.getMetrics('p1')).resolves.toEqual(metrics);
   });
 
-  it('calculates a negative ROI', () => {
-    expect(service.calculateRoi(1000, 800).roiPercent).toBe(-20);
+  it('throws NotFoundException when the property does not exist', async () => {
+    prisma.property.findUnique.mockResolvedValue(null);
+
+    await expect(service.getMetrics('missing')).rejects.toThrow(NotFoundException);
   });
 
-  it('throws when amountInvested is not positive', () => {
-    expect(() => service.calculateRoi(0, 100)).toThrow(BadRequestException);
+  it('reports ok when the database answers', async () => {
+    prisma.$queryRaw.mockResolvedValue([{ '?column?': 1 }]);
+
+    const result = await service.health();
+    expect(result.status).toBe('ok');
+    expect(result.service).toBe('InvestmentAPI');
+  });
+
+  it('reports error when the database is down', async () => {
+    prisma.$queryRaw.mockRejectedValue(new Error('db down'));
+
+    const result = await service.health();
+    expect(result.status).toBe('error');
   });
 });

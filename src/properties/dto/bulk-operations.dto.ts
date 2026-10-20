@@ -1,4 +1,6 @@
 import { IsArray, IsEnum, IsOptional, IsString, IsUUID, ArrayMinSize } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { TrimListingQuery } from '../sanitize-listing-query.util';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PropertyStatus } from '../../types/prisma.types';
 

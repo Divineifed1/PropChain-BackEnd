@@ -31,9 +31,8 @@ export class CacheHeadersInterceptor implements NestInterceptor {
 
         // Add cache status header based on monitoring service metrics
         const metrics = this.cacheMonitoringService.getMetrics();
-        const errorRate = metrics.totalRequests > 0 
-          ? (metrics.errors / metrics.totalRequests) * 100 
-          : 0;
+        const errorRate =
+          metrics.totalRequests > 0 ? (metrics.errors / metrics.totalRequests) * 100 : 0;
 
         // Set cache status header
         if (errorRate > 5) {

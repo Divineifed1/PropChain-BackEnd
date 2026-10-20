@@ -19,7 +19,9 @@ describe('ApiKeyAuthGuard - transport styles (#1193)', () => {
   let authService: { validateApiKey: jest.Mock };
 
   beforeEach(() => {
-    authService = { validateApiKey: jest.fn().mockResolvedValue({ sub: 'user-1', type: 'api-key' }) };
+    authService = {
+      validateApiKey: jest.fn().mockResolvedValue({ sub: 'user-1', type: 'api-key' }),
+    };
     guard = new ApiKeyAuthGuard(authService as unknown as AuthService);
   });
 

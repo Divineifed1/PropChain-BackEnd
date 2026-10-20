@@ -1,4 +1,9 @@
-import { ExecutionContext, UnauthorizedException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  UnauthorizedException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MetricsAuthGuard } from './metrics-auth.guard';
 
 describe('MetricsAuthGuard', () => {

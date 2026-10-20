@@ -193,13 +193,15 @@ export class CacheService {
 
       // If cache error, still try factory but report the error
       if (cacheResult.status === CacheOperationStatus.ERROR) {
-        this.logger.warn(`Cache error for key ${key}, falling back to factory: ${cacheResult.error}`);
+        this.logger.warn(
+          `Cache error for key ${key}, falling back to factory: ${cacheResult.error}`,
+        );
       }
 
       // Cache miss or error - fetch and cache it
       const value = await factory();
       const setResult = await this.set(key, value, ttl, tag);
-      
+
       if (setResult.status === CacheOperationStatus.ERROR) {
         this.logger.warn(`Failed to cache value for key ${key}: ${setResult.error}`);
         return { data: value, source: 'factory', error: setResult.error };
@@ -394,7 +396,7 @@ export class CacheService {
     const start = Date.now();
     try {
       // Test connectivity with a simple get operation
-      const result = await this.get('__health_check__');
+      await this.get('__health_check__');
       const latency = Date.now() - start;
 
       // Get additional stats if available
@@ -420,7 +422,11 @@ export class CacheService {
    * Returns typed result indicating success/failure/error.
    * ttlSeconds: lock expiry to prevent stale locks on crash.
    */
-  async setNx(key: string, value: string, ttlSeconds: number): Promise<CacheOperationResult & { acquired: boolean }> {
+  async setNx(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<CacheOperationResult & { acquired: boolean }> {
     try {
       const client = (this.cacheManager as any).store.getClient();
       const result = await client.set(key, value, 'EX', ttlSeconds, 'NX');

@@ -28,7 +28,8 @@ export class CredentialInjectionPipe implements PipeTransform {
       if (key.startsWith('$') || key.includes('.')) {
         throw new BadRequestException('Invalid field name in request body');
       }
-      if (val === null || val === undefined || typeof val === 'boolean' || typeof val === 'number') continue;
+      if (val === null || val === undefined || typeof val === 'boolean' || typeof val === 'number')
+        continue;
       if (typeof val === 'string') {
         if (val.includes('\0')) throw new BadRequestException(`Invalid characters in ${key}`);
         // Passwords may legitimately contain "--" or ";", so only free-text fields are screened.
@@ -39,7 +40,8 @@ export class CredentialInjectionPipe implements PipeTransform {
       }
       if (Array.isArray(val)) {
         val.forEach((item) => {
-          if (item !== null && typeof item === 'object') throw new BadRequestException(`Invalid value for ${key}`);
+          if (item !== null && typeof item === 'object')
+            throw new BadRequestException(`Invalid value for ${key}`);
         });
         continue;
       }

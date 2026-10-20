@@ -84,19 +84,18 @@ export class HealthController {
     }
 
     // Redis check
-    const redisStart = Date.now();
     try {
       const healthStatus = await this.cacheService.getHealthStatus();
       if (healthStatus.connected) {
-        checks.redis = { 
-          status: 'ok', 
+        checks.redis = {
+          status: 'ok',
           latencyMs: healthStatus.latencyMs,
         };
       } else {
         allOk = false;
         this.logger.error('Readiness probe Redis check failed: Redis not connected');
-        checks.redis = { 
-          status: 'error', 
+        checks.redis = {
+          status: 'error',
           error: 'redis_unreachable',
           latencyMs: healthStatus.latencyMs,
         };
@@ -214,9 +213,7 @@ export class HealthController {
 
       // Check table existence
       const foundTables = new Set(
-        rows
-          .map((r) => r.table_name?.toLowerCase())
-          .filter((t): t is string => Boolean(t)),
+        rows.map((r) => r.table_name?.toLowerCase()).filter((t): t is string => Boolean(t)),
       );
 
       // If information_schema rows were returned, verify all required tables exist

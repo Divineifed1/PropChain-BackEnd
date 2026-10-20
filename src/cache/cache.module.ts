@@ -5,6 +5,7 @@
 
 import { Module, Global } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { ScheduleModule } from '@nestjs/schedule';
 import { REDIS_CONFIG } from './cache.config';
 import { CacheService } from './cache.service';

@@ -96,7 +96,10 @@ export class AppController {
         migrationsApplied,
       };
     } catch (err: unknown) {
-      this.logger.error('Health check database error', err instanceof Error ? err.stack : String(err));
+      this.logger.error(
+        'Health check database error',
+        err instanceof Error ? err.stack : String(err),
+      );
       checks.database = {
         status: 'error',
         error: 'db_unreachable',
@@ -134,7 +137,10 @@ export class AppController {
         delayed,
       };
     } catch (err: unknown) {
-      this.logger.error('Health check email queue error', err instanceof Error ? err.stack : String(err));
+      this.logger.error(
+        'Health check email queue error',
+        err instanceof Error ? err.stack : String(err),
+      );
       checks.emailQueue = {
         status: 'error',
         error: 'email_queue_unreachable',

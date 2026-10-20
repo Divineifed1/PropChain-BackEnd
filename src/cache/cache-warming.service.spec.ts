@@ -1,8 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { CacheWarmingService, resolveWarmingIntervalMs, DEFAULT_WARMING_INTERVAL_MS } from './cache-warming.service';
+import {
+  CacheWarmingService,
+  resolveWarmingIntervalMs,
+  DEFAULT_WARMING_INTERVAL_MS,
+} from './cache-warming.service';
 import { CacheService } from './cache.service';
 import { CacheMonitoringService } from './cache-monitoring.service';
 import { PrismaService } from '../database/prisma.service';
+import { CacheOperationStatus } from './cache.types';
 
 describe('CacheWarmingService', () => {
   let service: CacheWarmingService;
@@ -168,8 +173,24 @@ describe('CacheWarmingService', () => {
 
     it('should log hit rate before and after warming', async () => {
       cacheMonitoringService.getMetrics
-        .mockReturnValueOnce({ hitRate: 70, totalRequests: 100 })
-        .mockReturnValueOnce({ hitRate: 85, totalRequests: 200 });
+        .mockReturnValueOnce({
+          hits: 70,
+          misses: 30,
+          errors: 0,
+          hitRate: 70,
+          totalRequests: 100,
+          avgResponseTime: 1,
+          timestamp: new Date(),
+        })
+        .mockReturnValueOnce({
+          hits: 170,
+          misses: 30,
+          errors: 0,
+          hitRate: 85,
+          totalRequests: 200,
+          avgResponseTime: 1,
+          timestamp: new Date(),
+        });
 
       await service.warmCache();
 
@@ -197,9 +218,7 @@ describe('CacheWarmingService', () => {
 
   describe('individual warmers', () => {
     it('should warm featured properties', async () => {
-      (prisma.property.findMany as jest.Mock).mockResolvedValue([
-        { id: '1', name: 'Property 1' },
-      ]);
+      (prisma.property.findMany as jest.Mock).mockResolvedValue([{ id: '1', name: 'Property 1' }]);
 
       await service['warmFeaturedProperties']();
 
@@ -214,9 +233,7 @@ describe('CacheWarmingService', () => {
     });
 
     it('should warm popular properties', async () => {
-      (prisma.property.findMany as jest.Mock).mockResolvedValue([
-        { id: '2', name: 'Property 2' },
-      ]);
+      (prisma.property.findMany as jest.Mock).mockResolvedValue([{ id: '2', name: 'Property 2' }]);
 
       await service['warmPopularProperties']();
 
@@ -249,7 +266,10 @@ describe('CacheWarmingService', () => {
 
   describe('predictive warming', () => {
     it('should skip when no access pattern exists', async () => {
-      cacheService.get.mockResolvedValue(undefined);
+      cacheService.get.mockResolvedValue({
+        status: CacheOperationStatus.MISS,
+        timestamp: new Date(),
+      });
 
       await service['warmPredictiveKeys']();
 
@@ -257,7 +277,17 @@ describe('CacheWarmingService', () => {
     });
 
     it('should warm hot keys that are already cached', async () => {
-      cacheService.get.mockResolvedValue({ data: 'cached' });
+      cacheService.get
+        .mockResolvedValueOnce({
+          status: CacheOperationStatus.SUCCESS,
+          data: { 'hot:key': 5 },
+          timestamp: new Date(),
+        })
+        .mockResolvedValueOnce({
+          status: CacheOperationStatus.SUCCESS,
+          data: 'cached',
+          timestamp: new Date(),
+        });
 
       await service['warmPredictiveKeys']();
 
@@ -265,7 +295,16 @@ describe('CacheWarmingService', () => {
     });
 
     it('should not warm keys that are not cached', async () => {
-      cacheService.get.mockResolvedValue(undefined);
+      cacheService.get
+        .mockResolvedValueOnce({
+          status: CacheOperationStatus.SUCCESS,
+          data: { 'cold:key': 2 },
+          timestamp: new Date(),
+        })
+        .mockResolvedValueOnce({
+          status: CacheOperationStatus.MISS,
+          timestamp: new Date(),
+        });
 
       await service['warmPredictiveKeys']();
 
@@ -300,8 +339,13 @@ describe('CacheWarmingService', () => {
 
     it('should return warming metrics', () => {
       cacheMonitoringService.getMetrics.mockReturnValue({
+        hits: 450,
+        misses: 50,
+        errors: 0,
         hitRate: 90,
         totalRequests: 500,
+        avgResponseTime: 1,
+        timestamp: new Date(),
       });
 
       const metrics = service.getWarmingMetrics();

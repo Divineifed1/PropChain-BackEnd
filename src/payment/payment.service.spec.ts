@@ -22,16 +22,16 @@ describe('PaymentService', () => {
   });
 
   it('rejects a non-positive amount', () => {
-    expect(() =>
-      service.create({ amount: 0, currency: 'USD', reference: 'ref-2' }),
-    ).toThrow(BadRequestException);
+    expect(() => service.create({ amount: 0, currency: 'USD', reference: 'ref-2' })).toThrow(
+      BadRequestException,
+    );
   });
 
   it('rejects a duplicate reference', () => {
     service.create({ amount: 50, currency: 'USD', reference: 'dup' });
-    expect(() =>
-      service.create({ amount: 75, currency: 'USD', reference: 'dup' }),
-    ).toThrow(BadRequestException);
+    expect(() => service.create({ amount: 75, currency: 'USD', reference: 'dup' })).toThrow(
+      BadRequestException,
+    );
   });
 
   it('throws NotFound for an unknown id', () => {

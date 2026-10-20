@@ -201,7 +201,10 @@ export class RateLimitGuard implements CanActivate {
 
     if (forwardedForStr) {
       // Right-most entry is the hop closest to us when behind a trusted proxy.
-      const candidates = forwardedForStr.split(',').map((s) => sanitizeIpEntry(s)).filter(Boolean);
+      const candidates = forwardedForStr
+        .split(',')
+        .map((s) => sanitizeIpEntry(s))
+        .filter(Boolean);
       const nearest = candidates[candidates.length - 1];
       if (nearest) {
         return nearest;
@@ -213,10 +216,7 @@ export class RateLimitGuard implements CanActivate {
 
   private fromSocket(request: Request): string {
     return (
-      request.ip ||
-      request.connection?.remoteAddress ||
-      request.socket?.remoteAddress ||
-      'unknown'
+      request.ip || request.connection?.remoteAddress || request.socket?.remoteAddress || 'unknown'
     );
   }
 

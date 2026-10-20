@@ -54,7 +54,8 @@ export class PropertiesRouteRateLimitGuard implements CanActivate {
     );
 
     if (status.isExceeded) {
-      if (status.retryAfter !== undefined) response.setHeader('Retry-After', String(status.retryAfter));
+      if (status.retryAfter !== undefined)
+        response.setHeader('Retry-After', String(status.retryAfter));
       throw new HttpException(
         {
           statusCode: HttpStatus.TOO_MANY_REQUESTS,

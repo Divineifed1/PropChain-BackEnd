@@ -325,7 +325,7 @@ export class SmsService {
   private async checkRateLimitAsync(phone: string): Promise<boolean> {
     if (this.cacheService) {
       const key = `sms:ratelimit:${phone}`;
-      const count = (await this.cacheService.get<number>(key)) || 0;
+      const count = (await this.cacheService.get<number>(key)).data ?? 0;
       return count < this.maxPerMinute;
     }
     return this.checkRateLimit(phone);
@@ -334,7 +334,7 @@ export class SmsService {
   private async recordSendAsync(phone: string): Promise<void> {
     if (this.cacheService) {
       const key = `sms:ratelimit:${phone}`;
-      const count = (await this.cacheService.get<number>(key)) || 0;
+      const count = (await this.cacheService.get<number>(key)).data ?? 0;
       await this.cacheService.set(key, count + 1, 60);
     }
     this.recordSend(phone);

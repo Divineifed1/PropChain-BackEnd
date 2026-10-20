@@ -316,7 +316,11 @@ export class EmailService {
       // Prefer catalogue subject when available
       const subjectKey = this.subjectKeyForTemplate(options.template, options.context);
       if (subjectKey) {
-        const subject = this.i18nService.tFor(subjectKey, lang as 'en' | 'es', options.context as any);
+        const subject = this.i18nService.tFor(
+          subjectKey,
+          lang as 'en' | 'es',
+          options.context as any,
+        );
         if (subject !== subjectKey) {
           options.subject = subject;
         }
@@ -334,8 +338,13 @@ export class EmailService {
     // 1. Check if user is blocked or has invalid / bounced email
     if (options.userId) {
       const user = await this.prisma.user.findUnique({ where: { id: options.userId } });
-      if (user && (user.isBlocked || user.emailStatus === 'INVALID' || user.emailStatus === 'BOUNCED')) {
-        this.logger.warn(`🚫 Skipping email to ${redactEmail(options.to)} (User blocked or email invalid/bounced)`);
+      if (
+        user &&
+        (user.isBlocked || user.emailStatus === 'INVALID' || user.emailStatus === 'BOUNCED')
+      ) {
+        this.logger.warn(
+          `🚫 Skipping email to ${redactEmail(options.to)} (User blocked or email invalid/bounced)`,
+        );
         return;
       }
     }
@@ -389,7 +398,9 @@ export class EmailService {
         },
       );
 
-      this.logger.log(`📧 Email to ${redactEmail(options.to)} queued for subject: ${options.subject}`);
+      this.logger.log(
+        `📧 Email to ${redactEmail(options.to)} queued for subject: ${options.subject}`,
+      );
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.logger.error(`❌ Failed to queue email to ${redactEmail(options.to)}: ${error.message}`);
@@ -479,7 +490,7 @@ export class EmailService {
 
   private subjectKeyForTemplate(
     template: string,
-    context: Record<string, unknown>,
+    _context: Record<string, unknown>,
   ): string | null {
     const map: Record<string, string> = {
       'password-reset': 'email.password_reset_subject',
@@ -491,5 +502,4 @@ export class EmailService {
     };
     return map[template] ?? null;
   }
-
 }

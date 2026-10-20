@@ -14,9 +14,7 @@ export interface MagicSignature {
 const SIGNATURES: Record<string, MagicSignature[][]> = {
   'application/pdf': [[{ offset: 0, bytes: [0x25, 0x50, 0x44, 0x46] }]], // %PDF
   'image/jpeg': [[{ offset: 0, bytes: [0xff, 0xd8, 0xff] }]],
-  'image/png': [
-    [{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }],
-  ],
+  'image/png': [[{ offset: 0, bytes: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }]],
   'image/gif': [
     [{ offset: 0, bytes: [0x47, 0x49, 0x46, 0x38, 0x37, 0x61] }], // GIF87a
     [{ offset: 0, bytes: [0x47, 0x49, 0x46, 0x38, 0x39, 0x61] }], // GIF89a
@@ -41,9 +39,7 @@ const SIGNATURES: Record<string, MagicSignature[][]> = {
     ],
   ],
   // OLE2 compound document (legacy .doc)
-  'application/msword': [
-    [{ offset: 0, bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] }],
-  ],
+  'application/msword': [[{ offset: 0, bytes: [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1] }]],
   // ZIP archive (OOXML .docx is a ZIP container)
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [
     [{ offset: 0, bytes: [0x50, 0x4b, 0x03, 0x04] }],

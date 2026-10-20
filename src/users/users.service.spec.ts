@@ -52,11 +52,13 @@ describe('UsersService', () => {
 
     beforeEach(() => {
       prisma.user.findUnique.mockResolvedValue(null); // referral code is free, no referrer
-      prisma.user.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-        id: 'u1',
-        ...data,
-        twoFactorSecret: 'secret',
-      }));
+      prisma.user.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          id: 'u1',
+          ...data,
+          twoFactorSecret: 'secret',
+        }),
+      );
     });
 
     it('stores a hash, never the plain password, and strips secrets from the result', async () => {
@@ -103,7 +105,9 @@ describe('UsersService', () => {
 
       await service.create({ ...dto, referralCode: 'FRIEND' });
 
-      expect(prisma.user.findUnique).toHaveBeenLastCalledWith({ where: { referralCode: 'FRIEND' } });
+      expect(prisma.user.findUnique).toHaveBeenLastCalledWith({
+        where: { referralCode: 'FRIEND' },
+      });
       expect(prisma.user.create.mock.calls[0][0].data.referredById).toBe('referrer-1');
     });
 
@@ -139,7 +143,9 @@ describe('UsersService', () => {
 
   describe('admin state changes', () => {
     beforeEach(() => {
-      prisma.user.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => data);
+      prisma.user.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => data,
+      );
     });
 
     it('block / unblock toggle isBlocked', async () => {
@@ -198,13 +204,21 @@ describe('UsersService', () => {
 
       const args = prisma.user.findMany.mock.calls[0][0];
       expect(args.where).toEqual({ referredById: 'u1' });
-      expect(Object.keys(args.select).sort()).toEqual(['createdAt', 'email', 'firstName', 'id', 'lastName']);
+      expect(Object.keys(args.select).sort()).toEqual([
+        'createdAt',
+        'email',
+        'firstName',
+        'id',
+        'lastName',
+      ]);
     });
   });
 
   describe('getLoginHistory', () => {
-    it('returns the caller\'s logins newest first without extra fields', async () => {
-      prisma.loginHistory.findMany.mockResolvedValue([{ timestamp: new Date(), ipAddress: '1.1.1.1' }]);
+    it("returns the caller's logins newest first without extra fields", async () => {
+      prisma.loginHistory.findMany.mockResolvedValue([
+        { timestamp: new Date(), ipAddress: '1.1.1.1' },
+      ]);
 
       await service.getLoginHistory('u1');
 

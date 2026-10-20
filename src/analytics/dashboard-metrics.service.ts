@@ -58,11 +58,13 @@ export class DashboardMetricsService {
    */
   async getSnapshot(): Promise<DashboardSnapshot> {
     try {
-      return await this.cacheService.getOrSet(
-        DASHBOARD_SNAPSHOT_KEY,
-        () => this.buildSnapshot(),
-        DASHBOARD_SNAPSHOT_TTL_SECONDS,
-      );
+      return (
+        await this.cacheService.getOrSet(
+          DASHBOARD_SNAPSHOT_KEY,
+          () => this.buildSnapshot(),
+          DASHBOARD_SNAPSHOT_TTL_SECONDS,
+        )
+      ).data;
     } catch (error) {
       // Cache unavailable — compute directly rather than dropping the feed.
       this.logger.warn(

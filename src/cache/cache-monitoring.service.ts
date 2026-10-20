@@ -152,7 +152,8 @@ export class CacheMonitoringService {
     }
 
     // Alert if error rate is too high.
-    const errorRate = metrics.totalRequests > 0 ? (metrics.errors / metrics.totalRequests) * 100 : 0;
+    const errorRate =
+      metrics.totalRequests > 0 ? (metrics.errors / metrics.totalRequests) * 100 : 0;
     if (errorRate > 5 && metrics.totalRequests > 50) {
       alerts.push(`⚠️ High cache error rate: ${errorRate.toFixed(2)}%`);
     }

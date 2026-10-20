@@ -32,7 +32,9 @@ export class MetricsAuthGuard implements CanActivate {
       const localPort = request.socket?.localPort;
       // If the request was received on a different port than the configured METRICS_PORT
       if (localPort && localPort !== configuredPort) {
-        throw new NotFoundException('Metrics endpoint is only accessible on the configured METRICS_PORT');
+        throw new NotFoundException(
+          'Metrics endpoint is only accessible on the configured METRICS_PORT',
+        );
       }
     }
 
@@ -50,7 +52,9 @@ export class MetricsAuthGuard implements CanActivate {
       });
 
       if (!isAllowed) {
-        throw new ForbiddenException('Access to metrics endpoint is forbidden from this IP address');
+        throw new ForbiddenException(
+          'Access to metrics endpoint is forbidden from this IP address',
+        );
       }
     }
 

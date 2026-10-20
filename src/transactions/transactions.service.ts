@@ -64,8 +64,14 @@ export class TransactionsService {
     // Validate that property and users exist (only fetch the columns used here)
     const [property, buyer, seller] = await Promise.all([
       this.prisma.property.findUnique({ where: { id: dto.propertyId }, select: { id: true } }),
-      this.prisma.user.findUnique({ where: { id: dto.buyerId }, select: { id: true, phone: true } }),
-      this.prisma.user.findUnique({ where: { id: dto.sellerId }, select: { id: true, phone: true } }),
+      this.prisma.user.findUnique({
+        where: { id: dto.buyerId },
+        select: { id: true, phone: true },
+      }),
+      this.prisma.user.findUnique({
+        where: { id: dto.sellerId },
+        select: { id: true, phone: true },
+      }),
     ]);
 
     if (!property) {

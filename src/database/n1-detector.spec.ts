@@ -28,7 +28,8 @@ describe('n1-detector', () => {
     });
 
     it('looks through a FROM (…) subquery to the real table', () => {
-      const sql = 'SELECT sub.id FROM (SELECT "id" FROM "public"."Transaction" WHERE "amount" > $1) AS sub';
+      const sql =
+        'SELECT sub.id FROM (SELECT "id" FROM "public"."Transaction" WHERE "amount" > $1) AS sub';
       expect(extractPrimaryTable(sql)).toBe('Transaction');
     });
 
@@ -61,8 +62,12 @@ describe('n1-detector', () => {
     });
 
     it('handles INSERT, UPDATE and DELETE', () => {
-      expect(extractPrimaryTable('INSERT INTO "public"."AuditLog" ("id") VALUES ($1)')).toBe('AuditLog');
-      expect(extractPrimaryTable('UPDATE "public"."User" SET "name" = $1 WHERE "id" = $2')).toBe('User');
+      expect(extractPrimaryTable('INSERT INTO "public"."AuditLog" ("id") VALUES ($1)')).toBe(
+        'AuditLog',
+      );
+      expect(extractPrimaryTable('UPDATE "public"."User" SET "name" = $1 WHERE "id" = $2')).toBe(
+        'User',
+      );
       expect(extractPrimaryTable('DELETE FROM "public"."Session" WHERE "id" = $1')).toBe('Session');
     });
 
@@ -153,7 +158,9 @@ describe('n1-detector', () => {
     });
 
     it('can be disabled everywhere with DB_N1_DETECTION=false', () => {
-      expect(isN1DetectionEnabled({ NODE_ENV: 'development', DB_N1_DETECTION: 'false' })).toBe(false);
+      expect(isN1DetectionEnabled({ NODE_ENV: 'development', DB_N1_DETECTION: 'false' })).toBe(
+        false,
+      );
     });
   });
 

@@ -2,7 +2,8 @@ import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
 
 const MAX_DEPTH = 8;
 const SQL_MARKERS = /(--|\/\*|;\s*(drop|delete|update|insert|alter|truncate)\b)/i;
-const FREE_TEXT_FIELDS = /^(location|title|description|address|city|state|zipCode|country|propertyType|category|tag|filter|reason|hoaName|hoaContactInfo)$/;
+const FREE_TEXT_FIELDS =
+  /^(location|title|description|address|city|state|zipCode|country|propertyType|category|tag|filter|reason|hoaName|hoaContactInfo)$/;
 
 /**
  * Screens Property API payloads and queries for injection shapes before they
@@ -28,7 +29,8 @@ export class PropertyInjectionGuardPipe implements PipeTransform {
   private inspect(node: unknown, depth: number, path: string): void {
     if (depth > MAX_DEPTH) throw new BadRequestException('Request is nested too deeply');
     if (typeof node === 'string') {
-      if (node.includes('\0')) throw new BadRequestException(`Invalid characters in ${path || 'value'}`);
+      if (node.includes('\0'))
+        throw new BadRequestException(`Invalid characters in ${path || 'value'}`);
       if (FREE_TEXT_FIELDS.test(path) && SQL_MARKERS.test(node)) {
         throw new BadRequestException(`Invalid characters in ${path}`);
       }

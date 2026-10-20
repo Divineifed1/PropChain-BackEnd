@@ -194,7 +194,10 @@ export function setupSwagger(app: INestApplication): OpenAPIObject {
  * returned by setupSwagger so both endpoints serve the same spec; if omitted,
  * a minimal document is generated.
  */
-export function setupOpenAPIEndpoint(app: INestApplication, document?: OpenAPIObject): OpenAPIObject {
+export function setupOpenAPIEndpoint(
+  app: INestApplication,
+  document?: OpenAPIObject,
+): OpenAPIObject {
   const spec =
     document ??
     SwaggerModule.createDocument(

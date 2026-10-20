@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { CreatePaymentDto } from './dto/payment.dto';
 
@@ -38,9 +34,7 @@ export class PaymentService {
       (payment) => payment.reference === dto.reference,
     );
     if (duplicate) {
-      throw new BadRequestException(
-        `payment with reference "${dto.reference}" already exists`,
-      );
+      throw new BadRequestException(`payment with reference "${dto.reference}" already exists`);
     }
 
     const payment: Payment = {

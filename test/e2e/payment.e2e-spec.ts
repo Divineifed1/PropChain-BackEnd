@@ -39,8 +39,6 @@ describe('PaymentController (e2e)', () => {
   });
 
   it('GET /payments/:id returns 404 for an unknown id', async () => {
-    await request(app.getHttpServer())
-      .get('/payments/does-not-exist')
-      .expect(404);
+    await request(app.getHttpServer()).get('/payments/does-not-exist').expect(404);
   });
 });

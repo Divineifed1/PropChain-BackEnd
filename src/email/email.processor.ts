@@ -23,7 +23,9 @@ export class EmailProcessor extends WorkerHost {
     const { to, subject, template, context } = job.data;
     const redactedRecipient = redactEmail(to);
 
-    this.logger.log(`Processing email job ${job.id} for ${redactedRecipient} with subject: ${subject}`);
+    this.logger.log(
+      `Processing email job ${job.id} for ${redactedRecipient} with subject: ${subject}`,
+    );
 
     try {
       await this.mailerService.sendMail({
@@ -35,7 +37,10 @@ export class EmailProcessor extends WorkerHost {
       this.logger.log(`Email sent successfully to ${redactedRecipient}`);
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
-      this.logger.error(`Failed to send email to ${redactedRecipient}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Failed to send email to ${redactedRecipient}: ${error.message}`,
+        error.stack,
+      );
       throw error; // BullMQ will handle retries if configured
     }
   }

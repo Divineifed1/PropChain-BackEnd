@@ -64,11 +64,10 @@ export class EmailVerificationService {
         userId: userId,
         emailType: 'email_verification',
       }),
-    )
-      .catch((err) => {
-        // Fail quietly but log
-        this.logger.error('Failed to queue verification email:', err?.message || err);
-      });
+    ).catch((err) => {
+      // Fail quietly but log
+      this.logger.error('Failed to queue verification email:', err?.message || err);
+    });
 
     return {
       message: 'Verification email sent. Please check your new email to verify the change.',
@@ -85,6 +84,9 @@ export class EmailVerificationService {
     if (!user.pendingEmail) {
       throw new BadRequestException('No pending email change to resend verification for');
     }
+    // Captured before the async callbacks below: the narrowing on `user.pendingEmail`
+    // does not survive into closures.
+    const pendingEmail = user.pendingEmail;
 
     // Rate limit resends per endpoint to prevent abuse
     const limit = await this.rateLimitService.checkEndpointRateLimit('POST /users/email/resend');
@@ -107,17 +109,16 @@ export class EmailVerificationService {
     // Send verification email
     await retryWithBackoff(() =>
       this.emailService.sendEmail({
-        to: user.pendingEmail,
+        to: pendingEmail,
         subject: 'Verify your email - PropChain',
         template: 'email-verification',
         context: { token },
         userId: userId,
         emailType: 'email_verification',
       }),
-    )
-      .catch((err) => {
-        this.logger.error('Failed to queue verification email:', err?.message || err);
-      });
+    ).catch((err) => {
+      this.logger.error('Failed to queue verification email:', err?.message || err);
+    });
 
     return { message: 'Verification email resent' };
   }

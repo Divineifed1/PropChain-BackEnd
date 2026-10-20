@@ -87,7 +87,7 @@ export class I18nService implements OnModuleInit {
 
     // Lazily bind Prometheus counter if metrics module is present (avoids hard dep in unit tests).
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const metrics = require('../metrics/metrics.controller');
       if (metrics?.translationsMissingTotal) {
         this.missingCounter = metrics.translationsMissingTotal;

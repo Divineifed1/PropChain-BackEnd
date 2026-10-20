@@ -20,14 +20,11 @@ export interface PaginatedResult<T> {
  */
 @Injectable()
 export class InvestmentService {
-  private readonly investments: Investment[] = Array.from(
-    { length: 57 },
-    (_, index) => ({
-      id: index + 1,
-      property: `Property ${index + 1}`,
-      amount: (index + 1) * 1000,
-    }),
-  );
+  private readonly investments: Investment[] = Array.from({ length: 57 }, (_, index) => ({
+    id: index + 1,
+    property: `Property ${index + 1}`,
+    amount: (index + 1) * 1000,
+  }));
 
   findAll(page = 1, limit = 20): PaginatedResult<Investment> {
     const safePage = Math.max(1, Math.floor(page));

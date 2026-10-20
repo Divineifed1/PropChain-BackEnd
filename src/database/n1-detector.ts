@@ -36,10 +36,7 @@ const FROM_KEYWORD_FUNCTIONS = /\b(?:EXTRACT|SUBSTRING|TRIM|POSITION|OVERLAY)\s*
 const IDENT = String.raw`(?:"(?:[^"]|"")+"|[A-Za-z_][\w$]*)`;
 const QUALIFIED_IDENT = String.raw`${IDENT}(?:\s*\.\s*${IDENT})*`;
 
-const TABLE_REF = new RegExp(
-  String.raw`\b(FROM|JOIN|INTO|UPDATE)\s+(\(|${QUALIFIED_IDENT})`,
-  'gi',
-);
+const TABLE_REF = new RegExp(String.raw`\b(FROM|JOIN|INTO|UPDATE)\s+(\(|${QUALIFIED_IDENT})`, 'gi');
 const CTE_NAME = new RegExp(
   String.raw`(?:\bWITH(?:\s+RECURSIVE)?|,)\s*(${IDENT})\s*(?:\([^)]*\)\s*)?AS\s*(?:NOT\s+)?(?:MATERIALIZED\s*)?\(`,
   'gi',

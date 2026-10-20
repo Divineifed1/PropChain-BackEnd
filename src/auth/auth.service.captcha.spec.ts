@@ -109,9 +109,7 @@ describe('AuthService – CAPTCHA failure lockout', () => {
     it('throws a stable ServiceUnavailableException when the secret is absent and CAPTCHA is not bypassed', async () => {
       // Default harness config has no RECAPTCHA_SECRET and no CAPTCHA_BYPASS,
       // so CAPTCHA is required.
-      await expect(service['verifyCaptcha']('token')).rejects.toThrow(
-        ServiceUnavailableException,
-      );
+      await expect(service['verifyCaptcha']('token')).rejects.toThrow(ServiceUnavailableException);
       await expect(service['verifyCaptcha']('token')).rejects.toMatchObject({
         response: { error: 'CAPTCHA_SERVICE_UNAVAILABLE' },
       });

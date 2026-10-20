@@ -183,8 +183,9 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
    */
   private async warmPredictiveKeys(): Promise<void> {
     try {
-      const accessPattern =
+      const accessPatternResult =
         await this.cacheService.get<Record<string, number>>('cache:access-pattern');
+      const accessPattern = accessPatternResult?.data;
 
       if (!accessPattern) return;
 
@@ -197,8 +198,8 @@ export class CacheWarmingService implements OnModuleInit, OnModuleDestroy {
       for (const [key, _frequency] of sorted) {
         // Only warm keys that are already cached (refresh TTL)
         const existing = await this.cacheService.get(key);
-        if (existing !== undefined) {
-          await this.cacheService.set(key, existing, CACHE_TTL.MEDIUM);
+        if (existing?.data !== undefined) {
+          await this.cacheService.set(key, existing.data, CACHE_TTL.MEDIUM);
         }
       }
 

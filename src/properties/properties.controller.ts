@@ -42,6 +42,7 @@ import {
   ApiOperation,
   ApiParam,
   ApiProduces,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -53,7 +54,6 @@ import {
   PropertiesPaginationQueryDto,
   buildPropertiesPageMeta,
 } from './dto/pagination-query.dto';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { ListingsMetricsInterceptor } from './interceptors/listings-metrics.interceptor';
 import { PropertiesMetricsInterceptor } from './interceptors/properties-metrics.interceptor';

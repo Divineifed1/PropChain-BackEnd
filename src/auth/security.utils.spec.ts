@@ -102,12 +102,14 @@ describe('security.utils', () => {
   describe('TOTP', () => {
     it('matches the RFC 6238 SHA-1 test vectors', () => {
       // T = 59s -> 94287082 (8 digits); the 6-digit code is its last six digits.
-      expect(generateTotpCode({ secret: RFC_SECRET, digits: 8, timestamp: 59_000 })).toBe('94287082');
+      expect(generateTotpCode({ secret: RFC_SECRET, digits: 8, timestamp: 59_000 })).toBe(
+        '94287082',
+      );
       expect(generateTotpCode({ secret: RFC_SECRET, timestamp: 59_000 })).toBe('287082');
       // T = 1111111109s -> 07081804 (8 digits).
-      expect(generateTotpCode({ secret: RFC_SECRET, digits: 8, timestamp: 1_111_111_109_000 })).toBe(
-        '07081804',
-      );
+      expect(
+        generateTotpCode({ secret: RFC_SECRET, digits: 8, timestamp: 1_111_111_109_000 }),
+      ).toBe('07081804');
     });
 
     it('verifyTotpCode accepts the current code and one adjacent period', () => {
@@ -120,17 +122,24 @@ describe('security.utils', () => {
     });
 
     it('verifyTotpCode rejects codes outside the window or when the window is 0', () => {
-      expect(verifyTotpCode({ secret: RFC_SECRET, code: '287082', timestamp: 59_000 + 90_000 })).toBe(
-        false,
-      );
       expect(
-        verifyTotpCode({ secret: RFC_SECRET, code: '287082', timestamp: 59_000 + 30_000, window: 0 }),
+        verifyTotpCode({ secret: RFC_SECRET, code: '287082', timestamp: 59_000 + 90_000 }),
+      ).toBe(false);
+      expect(
+        verifyTotpCode({
+          secret: RFC_SECRET,
+          code: '287082',
+          timestamp: 59_000 + 30_000,
+          window: 0,
+        }),
       ).toBe(false);
       expect(verifyTotpCode({ secret: RFC_SECRET, code: '000000', timestamp: 59_000 })).toBe(false);
     });
 
     it('verifyTotpCode trims whitespace around the submitted code', () => {
-      expect(verifyTotpCode({ secret: RFC_SECRET, code: ' 287082 ', timestamp: 59_000 })).toBe(true);
+      expect(verifyTotpCode({ secret: RFC_SECRET, code: ' 287082 ', timestamp: 59_000 })).toBe(
+        true,
+      );
     });
   });
 

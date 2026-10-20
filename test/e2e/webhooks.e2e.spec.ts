@@ -539,6 +539,8 @@ describe('Webhook workflow (e2e)', () => {
       // Out of bounds / capped at last
       expect(service.getRetryDelay(6)).toBe(300000);
     });
+  });
+
   it('rejects registration of internal, private, and cloud metadata URLs (SSRF protection #1253)', async () => {
     const blockedUrls = [
       'http://169.254.169.254/latest/meta-data',

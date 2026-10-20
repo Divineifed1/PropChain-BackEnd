@@ -91,7 +91,10 @@ describe('CacheHeadersInterceptor', () => {
       expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Cache', 'hit');
       expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Cache-Hit-Rate', '80.00%');
       expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Cache-Error-Rate', '0.00%');
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Cache-Time', expect.stringMatching(/\d+ms/));
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'X-Cache-Time',
+        expect.stringMatching(/\d+ms/),
+      );
     });
 
     it('should set cache headers with error status when error rate is high', async () => {
@@ -176,7 +179,10 @@ describe('CacheHeadersInterceptor', () => {
       await interceptor.intercept(avifContext, avifHandler).toPromise();
 
       const mockResponse = avifContext.switchToHttp().getResponse();
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('Cache-Control', 'public, max-age=2592000');
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'Cache-Control',
+        'public, max-age=2592000',
+      );
     });
 
     it('should set default cache headers for non-image responses', async () => {
@@ -238,7 +244,10 @@ describe('CacheHeadersInterceptor', () => {
       await interceptor.intercept(context, handler).toPromise();
 
       const mockResponse = context.switchToHttp().getResponse();
-      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Cache-Time', expect.stringMatching(/\d+ms/));
+      expect(mockResponse.setHeader).toHaveBeenCalledWith(
+        'X-Cache-Time',
+        expect.stringMatching(/\d+ms/),
+      );
     });
   });
 });

@@ -11,7 +11,7 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { ApiKeyAnalyticsService } from './api-key-analytics.service';
 import {
@@ -33,8 +33,7 @@ import { FreshTwoFactorGuard } from './guards/fresh-two-factor.guard';
 import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
-import { KeyPermissionsGuard } from './guards/key-permissions.guard';
-import { RequireScopes } from './decorators/require-scopes.decorator';
+import { AuthRouteLimit, AuthRouteRateLimitGuard } from './guards/auth-route-rate-limit.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { AuthUserPayload } from './types/auth-user.type';
@@ -90,7 +89,10 @@ export class AuthController {
   @UseGuards(AuthRouteRateLimitGuard)
   @AuthRouteLimit({ max: 30, windowMs: 15 * 60 * 1000 })
   @Post('refresh')
-  refresh(@Body(CredentialInjectionPipe) refreshTokenDto: RefreshTokenDto, @Req() request: Request) {
+  refresh(
+    @Body(CredentialInjectionPipe) refreshTokenDto: RefreshTokenDto,
+    @Req() request: Request,
+  ) {
     const ipAddress = request.ip || request.socket.remoteAddress;
     const userAgent = request.headers['user-agent'];
     return this.authService.refreshToken(refreshTokenDto, ipAddress, userAgent);
@@ -122,7 +124,7 @@ export class AuthController {
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get the authenticated user's profile' })
+  @ApiOperation({ summary: "Get the authenticated user's profile" })
   @ApiResponse({ status: 200, description: 'Sanitised user profile' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 404, description: 'User not found' })

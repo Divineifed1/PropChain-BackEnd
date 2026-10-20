@@ -31,7 +31,12 @@ class RoleTestGuard implements CanActivate {
     const header: string | undefined = req.headers['authorization'];
     if (!header?.startsWith('Bearer role:')) return false;
     const role = header.slice('Bearer role:'.length);
-    req.authUser = { sub: `${role.toLowerCase()}-1`, email: `${role}@example.com`, role, type: 'access' };
+    req.authUser = {
+      sub: `${role.toLowerCase()}-1`,
+      email: `${role}@example.com`,
+      role,
+      type: 'access',
+    };
     return true;
   }
 }
@@ -134,18 +139,26 @@ describe('UsersController (integration)', () => {
     it('creates a user for an ADMIN', async () => {
       usersService.create.mockResolvedValue({ id: 'u2', email: valid.email });
       await asAdmin(request(app.getHttpServer()).post('/users').send(valid)).expect(201);
-      expect(usersService.create).toHaveBeenCalledWith(expect.objectContaining({ email: valid.email }));
+      expect(usersService.create).toHaveBeenCalledWith(
+        expect.objectContaining({ email: valid.email }),
+      );
     });
 
     it('rejects an invalid body with 400', async () => {
       await asAdmin(
-        request(app.getHttpServer()).post('/users').send({ ...valid, email: 'nope', password: 'short' }),
+        request(app.getHttpServer())
+          .post('/users')
+          .send({ ...valid, email: 'nope', password: 'short' }),
       ).expect(400);
       expect(usersService.create).not.toHaveBeenCalled();
     });
 
     it('rejects unknown fields with 400 (forbidNonWhitelisted)', async () => {
-      await asAdmin(request(app.getHttpServer()).post('/users').send({ ...valid, role: 'ADMIN' })).expect(400);
+      await asAdmin(
+        request(app.getHttpServer())
+          .post('/users')
+          .send({ ...valid, role: 'ADMIN' }),
+      ).expect(400);
       expect(usersService.create).not.toHaveBeenCalled();
     });
 
@@ -157,7 +170,9 @@ describe('UsersController (integration)', () => {
   describe('GET /users/search', () => {
     it('coerces page and limit to numbers', async () => {
       usersService.search.mockResolvedValue({ data: [], meta: {} });
-      await asAdmin(request(app.getHttpServer()).get('/users/search?q=ada&page=2&limit=5')).expect(200);
+      await asAdmin(request(app.getHttpServer()).get('/users/search?q=ada&page=2&limit=5')).expect(
+        200,
+      );
       expect(usersService.search).toHaveBeenCalledWith(
         expect.objectContaining({ q: 'ada', page: 2, limit: 5 }),
       );
@@ -176,12 +191,19 @@ describe('UsersController (integration)', () => {
   describe('PUT /users/:id', () => {
     it('updates with a valid partial body', async () => {
       usersService.update.mockResolvedValue({ id: 'u1', firstName: 'Grace' });
-      await asAdmin(request(app.getHttpServer()).put('/users/u1').send({ firstName: 'Grace' })).expect(200);
-      expect(usersService.update).toHaveBeenCalledWith('u1', expect.objectContaining({ firstName: 'Grace' }));
+      await asAdmin(
+        request(app.getHttpServer()).put('/users/u1').send({ firstName: 'Grace' }),
+      ).expect(200);
+      expect(usersService.update).toHaveBeenCalledWith(
+        'u1',
+        expect.objectContaining({ firstName: 'Grace' }),
+      );
     });
 
     it('rejects an invalid email with 400', async () => {
-      await asAdmin(request(app.getHttpServer()).put('/users/u1').send({ email: 'bad' })).expect(400);
+      await asAdmin(request(app.getHttpServer()).put('/users/u1').send({ email: 'bad' })).expect(
+        400,
+      );
       expect(usersService.update).not.toHaveBeenCalled();
     });
   });

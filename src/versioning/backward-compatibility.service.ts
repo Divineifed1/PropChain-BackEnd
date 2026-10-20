@@ -16,7 +16,7 @@ export class BackwardCompatibilityService {
    */
   private v2ToV1Transformers: Map<string, CompatibilityTransformer> = (() => {
     const map = new Map<string, CompatibilityTransformer>();
-    
+
     // User endpoint - remove V2-specific fields
     map.set('user', (data: any) => {
       const v1User: any = {
@@ -30,7 +30,7 @@ export class BackwardCompatibilityService {
       // V1 doesn't include timestamps, trustScore, etc.
       return v1User;
     });
-    
+
     // Property endpoint - remove V2-specific fields
     map.set('property', (data: any) => {
       const v1Property: any = {
@@ -48,7 +48,7 @@ export class BackwardCompatibilityService {
       // V1 doesn't include createdAt, verified, and other V2-specific fields
       return v1Property;
     });
-    
+
     // Transaction endpoint - remove V2-specific fields
     map.set('transaction', (data: any) => {
       const v1Transaction: any = {
@@ -65,7 +65,7 @@ export class BackwardCompatibilityService {
       // V1 doesn't include blockchain-specific fields, audit logs, etc.
       return v1Transaction;
     });
-    
+
     // Auth response - remove V2-specific fields
     map.set('auth', (data: any) => {
       const v1Auth: any = {
@@ -80,7 +80,7 @@ export class BackwardCompatibilityService {
       // V1 doesn't include token expiration, scopes, etc.
       return v1Auth;
     });
-    
+
     return map;
   })();
 

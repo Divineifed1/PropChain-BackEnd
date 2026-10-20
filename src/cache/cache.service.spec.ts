@@ -8,14 +8,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { CacheService } from './cache.service';
 import { CacheMonitoringService } from './cache-monitoring.service';
 import { Cache } from 'cache-manager';
-import {
-  CacheOperationStatus,
-  createSuccessResult,
-  createMissResult,
-  createErrorResult,
-  createOperationSuccessResult,
-  createOperationErrorResult,
-} from './cache.types';
+import { CacheOperationStatus } from './cache.types';
 
 describe('CacheService', () => {
   let service: CacheService;
@@ -153,7 +146,7 @@ describe('CacheService', () => {
 
   describe('del', () => {
     it('should return success result when delete succeeds', async () => {
-      cacheManager.del.mockResolvedValue(undefined);
+      cacheManager.del.mockResolvedValue(true);
 
       const result = await service.del('test-key');
 
@@ -177,7 +170,7 @@ describe('CacheService', () => {
 
   describe('delMultiple', () => {
     it('should return success result when multiple deletes succeed', async () => {
-      cacheManager.del.mockResolvedValue(undefined);
+      cacheManager.del.mockResolvedValue(true);
 
       const result = await service.delMultiple(['key1', 'key2', 'key3']);
 
@@ -306,7 +299,7 @@ describe('CacheService', () => {
 
   describe('invalidateByTag', () => {
     it('should return success result when tag invalidation succeeds', async () => {
-      cacheManager.del.mockResolvedValue(undefined);
+      cacheManager.del.mockResolvedValue(true);
 
       const result = await service.invalidateByTag('test-tag');
 
@@ -411,7 +404,7 @@ describe('CacheService', () => {
     });
 
     it('delLegacy should resolve without error', async () => {
-      cacheManager.del.mockResolvedValue(undefined);
+      cacheManager.del.mockResolvedValue(true);
       await expect(service.delLegacy('key')).resolves.toBeUndefined();
     });
   });

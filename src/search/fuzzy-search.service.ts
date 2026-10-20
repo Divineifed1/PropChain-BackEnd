@@ -87,12 +87,7 @@ export class FuzzySearchService {
         );
 
         // Transposition: swap adjacent characters in the query.
-        if (
-          i > 1 &&
-          j > 1 &&
-          short[j - 1] === long[i - 2] &&
-          short[j - 2] === long[i - 1]
-        ) {
+        if (i > 1 && j > 1 && short[j - 1] === long[i - 2] && short[j - 2] === long[i - 1]) {
           current[j] = Math.min(current[j], prev2[j - 2] + 1);
         }
       }

@@ -27,12 +27,9 @@ function buildHarness() {
   return { service, prisma, activityLogService };
 }
 
-const CSV_HEADER =
-  'email,firstName,lastName,password,role,phone\n';
+const CSV_HEADER = 'email,firstName,lastName,password,role,phone\n';
 
-function csvRow(
-  row = 'new.user@example.com,New,User,StrongPass1!,USER,5551234567',
-): Buffer {
+function csvRow(row = 'new.user@example.com,New,User,StrongPass1!,USER,5551234567'): Buffer {
   return Buffer.from(CSV_HEADER + row + '\n');
 }
 
@@ -50,7 +47,9 @@ describe('UserImportService – password policy (#1199) and role whitelist (#119
 
   it('rejects a weak password and reports it per-row without failing the whole import', async () => {
     const { service, prisma } = buildHarness();
-    const report = await service.importFromCsv(csvRow('weak@example.com,New,User,password123,USER,'));
+    const report = await service.importFromCsv(
+      csvRow('weak@example.com,New,User,password123,USER,'),
+    );
 
     expect(report.failed).toBe(1);
     expect(report.success).toBe(0);

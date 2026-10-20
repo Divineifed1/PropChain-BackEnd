@@ -21,7 +21,8 @@ export class AuthCacheService {
     if (!this.cache) return loader();
     try {
       const hit = await this.cache.get<T>(key);
-      if (hit.status === CacheOperationStatus.SUCCESS && hit.data !== undefined) return hit.data as T;
+      if (hit.status === CacheOperationStatus.SUCCESS && hit.data !== undefined)
+        return hit.data as T;
     } catch {
       return loader();
     }

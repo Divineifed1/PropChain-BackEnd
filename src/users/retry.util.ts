@@ -16,7 +16,12 @@ export interface RetryOptions {
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Delay before retry number `retry` (1-based): exponential, capped, with up to 50% jitter. */
-export function backoffDelayMs(retry: number, baseDelayMs: number, maxDelayMs: number, random: () => number): number {
+export function backoffDelayMs(
+  retry: number,
+  baseDelayMs: number,
+  maxDelayMs: number,
+  random: () => number,
+): number {
   const exponential = Math.min(maxDelayMs, baseDelayMs * 2 ** (retry - 1));
   return Math.round(exponential * (0.5 + random() * 0.5));
 }
@@ -25,7 +30,10 @@ export function backoffDelayMs(retry: number, baseDelayMs: number, maxDelayMs: n
  * Run `fn`, retrying failures with exponential backoff and jitter. The last
  * error is rethrown once attempts run out or `isRetryable` says to stop.
  */
-export async function retryWithBackoff<T>(fn: () => Promise<T>, options: RetryOptions = {}): Promise<T> {
+export async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  options: RetryOptions = {},
+): Promise<T> {
   const {
     attempts = 3,
     baseDelayMs = 200,

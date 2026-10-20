@@ -5,7 +5,13 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { USERS_DEFAULT_PAGE_SIZE, UsersPaginationQueryDto, buildUsersPageMeta } from './dto/pagination-query.dto';
+import { AppLogger } from '../common/logger';
+import { UsersCacheService, USER_STATISTICS_TTL_SECONDS } from './users-cache.service';
+import {
+  USERS_DEFAULT_PAGE_SIZE,
+  UsersPaginationQueryDto,
+  buildUsersPageMeta,
+} from './dto/pagination-query.dto';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -206,7 +212,10 @@ export class UsersService implements OnModuleInit {
 
       if (now - stats.mtimeMs > expirationTime) {
         fs.unlinkSync(filepath);
-        this.logger.log('Deleted expired export file', { event: 'users.export_file_deleted', file });
+        this.logger.log('Deleted expired export file', {
+          event: 'users.export_file_deleted',
+          file,
+        });
       }
     });
   }
@@ -214,8 +223,10 @@ export class UsersService implements OnModuleInit {
   /** Cached for 60 seconds per user; statistics may be that stale. Cache failures fall back to the database. */
   async getUserStatistics(userId: string) {
     if (!this.usersCache) return this.loadUserStatistics(userId);
-    return this.usersCache.remember(this.usersCache.statisticsKey(userId), USER_STATISTICS_TTL_SECONDS, () =>
-      this.loadUserStatistics(userId),
+    return this.usersCache.remember(
+      this.usersCache.statisticsKey(userId),
+      USER_STATISTICS_TTL_SECONDS,
+      () => this.loadUserStatistics(userId),
     );
   }
 
@@ -306,7 +317,11 @@ export class UsersService implements OnModuleInit {
     });
 
     userRegistrationsTotal.inc({ method: 'email' });
-    this.logger.log('User created', { event: 'users.created', userId: user.id, emailHash: redactEmail(user.email) });
+    this.logger.log('User created', {
+      event: 'users.created',
+      userId: user.id,
+      emailHash: redactEmail(user.email),
+    });
 
     return sanitizeUser(user);
   }
@@ -720,7 +735,11 @@ export class UsersService implements OnModuleInit {
    * a free-text match over email and names (`q`), a partial email match, and a
    * name match ("First Last" matches both parts, a single word matches either).
    */
-  private buildSearchWhere(filters: { q?: string; email?: string; name?: string }): Prisma.UserWhereInput {
+  private buildSearchWhere(filters: {
+    q?: string;
+    email?: string;
+    name?: string;
+  }): Prisma.UserWhereInput {
     const { q, email, name } = filters;
     const contains = (value: string) => ({ contains: value, mode: 'insensitive' as const });
     const where: Prisma.UserWhereInput = { isDeactivated: false };

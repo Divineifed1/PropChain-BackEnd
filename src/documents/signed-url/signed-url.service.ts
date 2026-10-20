@@ -1,4 +1,10 @@
-import { Inject, Injectable, InternalServerErrorException, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { SignedUrlResponse } from './signed-url-provider.interface';
 import { SIGNED_URL_PROVIDER_TOKEN } from '../documents.module';
 import { SignedUrlProvider, SignedUrlRequest } from './signed-url-provider.interface';
@@ -24,9 +30,7 @@ export class SignedUrlService implements OnModuleInit {
     const activeProvider = this.activeProviderName();
     const configured = this.isConfigured();
     if (configured) {
-      this.logger.log(
-        `Signed URL provider '${activeProvider}' is active and functional.`,
-      );
+      this.logger.log(`Signed URL provider '${activeProvider}' is active and functional.`);
       return;
     }
 

@@ -28,6 +28,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthUserPayload } from '../auth/types/auth-user.type';
 import { UserRole } from '../types/prisma.types';
+import { UsersRouteLimit, UsersRouteRateLimitGuard } from './guards/users-route-rate-limit.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { ActivityLogService } from './activity-log.service';
@@ -143,7 +144,10 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'List active users (admin)' })
-  @ApiResponse({ status: 200, description: 'Array of users, or { data, meta } when page/limit are given' })
+  @ApiResponse({
+    status: 200,
+    description: 'Array of users, or { data, meta } when page/limit are given',
+  })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 403, description: 'Admin role required' })
   @Get()
@@ -223,7 +227,7 @@ export class UsersController {
   // ─── Profile Management (#306) ───────────────────────────────────
 
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Get the caller's profile' })
+  @ApiOperation({ summary: "Get the caller's profile" })
   @ApiResponse({ status: 200, description: 'Profile with statistics' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -233,12 +237,15 @@ export class UsersController {
   }
 
   @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Update the caller's profile' })
+  @ApiOperation({ summary: "Update the caller's profile" })
   @ApiResponse({ status: 200, description: 'The updated profile' })
   @ApiResponse({ status: 400, description: 'Validation failed' })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   @Put('me/profile')
-  updateProfile(@CurrentUser() user: AuthUserPayload, @Body(UserInjectionGuardPipe) updateProfileDto: UpdateProfileDto) {
+  updateProfile(
+    @CurrentUser() user: AuthUserPayload,
+    @Body(UserInjectionGuardPipe) updateProfileDto: UpdateProfileDto,
+  ) {
     return this.usersService.updateProfile(user.sub, updateProfileDto);
   }
 

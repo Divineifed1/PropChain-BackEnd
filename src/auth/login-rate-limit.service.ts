@@ -21,10 +21,7 @@ export class LoginRateLimitService {
     private readonly configService: ConfigService,
   ) {
     this.config = {
-      maxAttempts: this.readPositiveInt(
-        'LOGIN_MAX_ATTEMPTS',
-        DEFAULT_MAX_ATTEMPTS,
-      ),
+      maxAttempts: this.readPositiveInt('LOGIN_MAX_ATTEMPTS', DEFAULT_MAX_ATTEMPTS),
       lockoutDurationMinutes: this.readPositiveInt(
         'LOGIN_LOCKOUT_MINUTES',
         DEFAULT_LOCKOUT_DURATION_MINUTES,
@@ -43,9 +40,7 @@ export class LoginRateLimitService {
     }
     const value = Number(raw);
     if (!Number.isInteger(value) || value <= 0) {
-      this.logger.warn(
-        `Invalid value "${raw}" for ${key}; falling back to ${fallback}.`,
-      );
+      this.logger.warn(`Invalid value "${raw}" for ${key}; falling back to ${fallback}.`);
       return fallback;
     }
     return value;

@@ -18,4 +18,3 @@ import { MetricsAuthGuard } from './metrics-auth.guard';
   exports: [MetricsService, MetricsAuthGuard],
 })
 export class MetricsModule {}
-

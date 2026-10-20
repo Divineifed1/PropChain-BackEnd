@@ -74,9 +74,9 @@ describe('Swagger UI under CSP', () => {
 
   it('serves every referenced asset from the same origin', async () => {
     const res = await request(app.getHttpServer()).get('/api/docs/').expect(200);
-    const assets = [...res.text.matchAll(/(?:src|href)=['"]\.?\/?([^'"]+\.(?:js|css|png))['"]/g)].map(
-      (m) => m[1].replace(/^.*\/api\/docs\//, ''),
-    );
+    const assets = [
+      ...res.text.matchAll(/(?:src|href)=['"]\.?\/?([^'"]+\.(?:js|css|png))['"]/g),
+    ].map((m) => m[1].replace(/^.*\/api\/docs\//, ''));
     expect(assets).toEqual(
       expect.arrayContaining(['swagger-ui-bundle.js', 'swagger-ui-init.js', 'swagger-ui.css']),
     );

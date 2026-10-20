@@ -21,9 +21,6 @@ export function getRequestLanguageContext(): RequestLanguageContext {
   return requestLanguageStore.getStore() ?? {};
 }
 
-export function runWithRequestLanguage<T>(
-  ctx: RequestLanguageContext,
-  fn: () => T,
-): T {
+export function runWithRequestLanguage<T>(ctx: RequestLanguageContext, fn: () => T): T {
   return requestLanguageStore.run(ctx, fn);
 }
