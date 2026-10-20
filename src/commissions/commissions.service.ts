@@ -44,42 +44,53 @@ export class CommissionsService {
         `Found ${agents.length} agents assigned to property for transaction ${transactionId}`,
       );
 
+      if (agents.length === 0) {
+        return;
+      }
+
+      // A single round-trip for the existing records replaces one findUnique per
+      // agent (the previous N+1).
+      const existing = await this.prisma.commission.findMany({
+        where: {
+          transactionId,
+          agentId: { in: agents.map((a: any) => a.agentId) },
+        },
+        select: { agentId: true },
+      });
+      const existingAgentIds = new Set(existing.map((c: any) => c.agentId));
+
+      const data: any[] = [];
       for (const agentAssignment of agents) {
-        // Calculate commission amount
-        const amount = transaction.amount.mul(agentAssignment.commissionRate);
-
-        // Check if commission record already exists
-        const existing = await this.prisma.commission.findUnique({
-          where: {
-            transactionId_agentId: {
-              transactionId,
-              agentId: agentAssignment.agentId,
-            },
-          },
-        });
-
-        if (existing) {
+        if (existingAgentIds.has(agentAssignment.agentId)) {
           this.logger.warn(
             `Commission for transaction ${transactionId} and agent ${agentAssignment.agentId} already exists`,
           );
           continue;
         }
 
-        await this.prisma.commission.create({
-          data: {
-            transactionId,
-            agentId: agentAssignment.agentId,
-            propertyId: transaction.propertyId,
-            amount,
-            rate: agentAssignment.commissionRate,
-            status: transaction.status,
-          },
+        // Calculate commission amount
+        const amount = transaction.amount.mul(agentAssignment.commissionRate);
+
+        data.push({
+          transactionId,
+          agentId: agentAssignment.agentId,
+          propertyId: transaction.propertyId,
+          amount,
+          rate: agentAssignment.commissionRate,
+          status: transaction.status,
         });
 
         this.logger.log(
           `Created commission of ${amount.toString()} for agent ${agentAssignment.agentId} on transaction ${transactionId}`,
         );
       }
+
+      if (data.length === 0) {
+        return;
+      }
+
+      // One insert instead of one create per agent.
+      await this.prisma.commission.createMany({ data });
     } catch (err: unknown) {
       const error = err instanceof Error ? err : new Error(String(err));
       this.logger.error(
@@ -253,108 +264,125 @@ export class CommissionsService {
   }
 
   /**
-   * Get commission stats for the current user (Agent or Admin)
+   * Get commission stats for the current user (Agent or Admin).
+   *
+   * Optimised to aggregate in the database instead of in Node: a single
+   * `groupBy` returns the per-status sum and count that previously took five
+   * round-trips (three `aggregate` + two `count`), and the per-agent breakdown
+   * uses `groupBy` on `agentId` rather than loading *every* commission (with its
+   * agent relation) into memory and folding it in JS.
    */
   async getStats(user: AuthUserPayload) {
     if (user.role === 'ADMIN') {
-      // Global Statistics
-      const completedAgg = await this.prisma.commission.aggregate({
+      // One grouped query replaces the three aggregate + two count round-trips.
+      const statusGroups = await (this.prisma.commission as any).groupBy({
+        by: ['status'],
         _sum: { amount: true },
-        where: { status: 'COMPLETED' },
+        _count: { _all: true },
       });
 
-      const pendingAgg = await this.prisma.commission.aggregate({
+      const totals = new Map<string, { sum: number; count: number }>();
+      for (const group of statusGroups as Array<{
+        status: string;
+        _sum: { amount: unknown };
+        _count: { _all: number };
+      }>) {
+        totals.set(group.status, {
+          sum: Number(group._sum.amount || 0),
+          count: group._count._all,
+        });
+      }
+
+      const completed = totals.get('COMPLETED') ?? { sum: 0, count: 0 };
+      const pending = totals.get('PENDING') ?? { sum: 0, count: 0 };
+      const cancelled = totals.get('CANCELLED') ?? { sum: 0, count: 0 };
+
+      // Per-agent breakdown: grouped in the database so we never load the full
+      // commission table, then a bounded lookup for the (few) agent rows.
+      const agentGroups = await (this.prisma.commission as any).groupBy({
+        by: ['agentId', 'status'],
         _sum: { amount: true },
-        where: { status: 'PENDING' },
       });
 
-      const cancelledAgg = await this.prisma.commission.aggregate({
-        _sum: { amount: true },
-        where: { status: 'CANCELLED' },
-      });
+      const agentIds = [
+        ...new Set((agentGroups as Array<{ agentId: string }>).map((g) => g.agentId)),
+      ];
+      const agents =
+        agentIds.length > 0
+          ? await this.prisma.user.findMany({
+              where: { id: { in: agentIds } },
+              select: { id: true, firstName: true, lastName: true, email: true },
+            })
+          : [];
 
-      // Get count of completed vs pending
-      const completedCount = await this.prisma.commission.count({
-        where: { status: 'COMPLETED' },
-      });
-      const pendingCount = await this.prisma.commission.count({
-        where: { status: 'PENDING' },
-      });
+      const agentMap = new Map(
+        agents.map((a) => [a.id, { name: `${a.firstName} ${a.lastName}`, email: a.email }]),
+      );
 
-      // Breakdown per agent
-      const commissions = await this.prisma.commission.findMany({
-        include: {
-          agent: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      const agentMap = new Map<
+      const agentStatsMap = new Map<
         string,
         { name: string; email: string; earned: number; pending: number }
       >();
-      commissions.forEach((c: any) => {
-        const agentId = c.agentId;
-        const current = agentMap.get(agentId) || {
-          name: `${c.agent.firstName} ${c.agent.lastName}`,
-          email: c.agent.email,
-          earned: 0,
-          pending: 0,
-        };
+      for (const group of agentGroups as Array<{
+        agentId: string;
+        status: string;
+        _sum: { amount: unknown };
+      }>) {
+        const details = agentMap.get(group.agentId) ?? { name: '', email: '' };
+        const current = agentStatsMap.get(group.agentId) ?? { ...details, earned: 0, pending: 0 };
 
-        if (c.status === 'COMPLETED') {
-          current.earned += Number(c.amount);
-        } else if (c.status === 'PENDING') {
-          current.pending += Number(c.amount);
+        if (group.status === 'COMPLETED') {
+          current.earned += Number(group._sum.amount || 0);
+        } else if (group.status === 'PENDING') {
+          current.pending += Number(group._sum.amount || 0);
         }
 
-        agentMap.set(agentId, current);
-      });
+        agentStatsMap.set(group.agentId, current);
+      }
 
-      const agentStats = Array.from(agentMap.entries()).map(([agentId, data]) => ({
+      const agentStats = Array.from(agentStatsMap.entries()).map(([agentId, data]) => ({
         agentId,
         ...data,
       }));
 
       return {
-        totalEarned: Number(completedAgg._sum.amount || 0),
-        totalPending: Number(pendingAgg._sum.amount || 0),
-        totalCancelled: Number(cancelledAgg._sum.amount || 0),
-        completedCount,
-        pendingCount,
+        totalEarned: completed.sum,
+        totalPending: pending.sum,
+        totalCancelled: cancelled.sum,
+        completedCount: completed.count,
+        pendingCount: pending.count,
         agentStats,
       };
     } else {
-      // Agent-specific Statistics
-      const completedAgg = await this.prisma.commission.aggregate({
+      // Agent-specific statistics: one grouped query replaces two aggregate and
+      // two count round-trips.
+      const statusGroups = await (this.prisma.commission as any).groupBy({
+        by: ['status'],
+        where: { agentId: user.sub },
         _sum: { amount: true },
-        where: { agentId: user.sub, status: 'COMPLETED' },
+        _count: { _all: true },
       });
 
-      const pendingAgg = await this.prisma.commission.aggregate({
-        _sum: { amount: true },
-        where: { agentId: user.sub, status: 'PENDING' },
-      });
+      const totals = new Map<string, { sum: number; count: number }>();
+      for (const group of statusGroups as Array<{
+        status: string;
+        _sum: { amount: unknown };
+        _count: { _all: number };
+      }>) {
+        totals.set(group.status, {
+          sum: Number(group._sum.amount || 0),
+          count: group._count._all,
+        });
+      }
 
-      const completedCount = await this.prisma.commission.count({
-        where: { agentId: user.sub, status: 'COMPLETED' },
-      });
-
-      const pendingCount = await this.prisma.commission.count({
-        where: { agentId: user.sub, status: 'PENDING' },
-      });
+      const completed = totals.get('COMPLETED') ?? { sum: 0, count: 0 };
+      const pending = totals.get('PENDING') ?? { sum: 0, count: 0 };
 
       return {
-        earned: Number(completedAgg._sum.amount || 0),
-        pending: Number(pendingAgg._sum.amount || 0),
-        completedCount,
-        pendingCount,
+        earned: completed.sum,
+        pending: pending.sum,
+        completedCount: completed.count,
+        pendingCount: pending.count,
       };
     }
   }
