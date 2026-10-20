@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/payment.dto';
 import { PaymentService } from './payment.service';
+import { sanitizeIdentifier } from './sanitize.util';
 
 @Controller('payments')
 export class PaymentController {
@@ -18,6 +19,8 @@ export class PaymentController {
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.paymentService.findOne(id);
+    // The id is raw user input: strip control characters and surrounding
+    // whitespace before it reaches the store.
+    return this.paymentService.findOne(sanitizeIdentifier(id) as string);
   }
 }

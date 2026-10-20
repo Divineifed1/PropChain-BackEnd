@@ -1,10 +1,7 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { CreatePaymentDto } from './dto/payment.dto';
+import { sanitizeIdentifier, sanitizeText } from './sanitize.util';
 
 export interface Payment {
   id: string;
@@ -34,20 +31,27 @@ export class PaymentService {
       throw new BadRequestException('amount must be greater than zero');
     }
 
+    // Sanitize free-text/identifier input here as well, so a direct caller that
+    // bypasses the DTO transforms cannot persist padded or tag-wrapped values.
+    const currency = sanitizeIdentifier(dto.currency) as string;
+    const reference = sanitizeText(dto.reference) as string;
+
+    if (!reference) {
+      throw new BadRequestException('reference is required');
+    }
+
     const duplicate = [...this.payments.values()].find(
-      (payment) => payment.reference === dto.reference,
+      (payment) => payment.reference === reference,
     );
     if (duplicate) {
-      throw new BadRequestException(
-        `payment with reference "${dto.reference}" already exists`,
-      );
+      throw new BadRequestException(`payment with reference "${reference}" already exists`);
     }
 
     const payment: Payment = {
       id: randomUUID(),
       amount: dto.amount,
-      currency: dto.currency,
-      reference: dto.reference,
+      currency,
+      reference,
       status: 'completed',
       createdAt: new Date().toISOString(),
     };
