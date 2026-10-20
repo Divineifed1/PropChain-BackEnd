@@ -89,4 +89,75 @@ describe('SessionsService', () => {
       expect(revocation.publishRevoked).toHaveBeenCalledWith(['s1', 's2']);
     });
   });
+
+  describe('input sanitization', () => {
+    const buildScoped = (session: any) => {
+      const scopedPrisma: any = {
+        session: {
+          findUnique: jest.fn().mockResolvedValue(session),
+          update: jest.fn().mockImplementation(({ data }) => ({ ...session, ...data })),
+        },
+      };
+      return {
+        prisma: scopedPrisma,
+        service: new SessionsService(
+          scopedPrisma as unknown as PrismaService,
+          { get: jest.fn().mockReturnValue(5) } as unknown as ConfigService,
+        ),
+      };
+    };
+
+    const session = {
+      id: 'sess-1',
+      userId: 'user-1',
+      accessTokenJti: 'a1',
+      refreshTokenJti: 'r1',
+      isRevoked: false,
+      expiresAt: new Date(),
+      createdAt: new Date(),
+      lastActivityAt: new Date(),
+    };
+
+    it('strips HTML tags and trims the display name before persisting', async () => {
+      const scoped = buildScoped(session);
+
+      await scoped.service.updateSession('user-1', 'sess-1', {
+        displayName: '  <b>My</b>   Laptop  ',
+      });
+
+      expect(scoped.prisma.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { displayName: 'My Laptop' } }),
+      );
+    });
+
+    it('removes control characters from the display name', async () => {
+      const scoped = buildScoped(session);
+
+      await scoped.service.updateSession('user-1', 'sess-1', {
+        displayName: 'Lap\u0000top',
+      });
+
+      expect(scoped.prisma.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { displayName: 'Laptop' } }),
+      );
+    });
+
+    it('leaves the display name undefined when not provided', async () => {
+      const scoped = buildScoped(session);
+
+      await scoped.service.updateSession('user-1', 'sess-1', {});
+
+      expect(scoped.prisma.session.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { displayName: undefined } }),
+      );
+    });
+
+    it('normalises the session id route input before querying', async () => {
+      const scoped = buildScoped(session);
+
+      await scoped.service.getSession('  sess-1  ');
+
+      expect(scoped.prisma.session.findUnique).toHaveBeenCalledWith({ where: { id: 'sess-1' } });
+    });
+  });
 });

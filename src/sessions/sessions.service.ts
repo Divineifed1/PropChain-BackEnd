@@ -9,6 +9,7 @@ import {
   RevokeAllSessionsDto,
   UpdateSessionDto,
 } from './dto/session.dto';
+import { sanitizeIdentifier, sanitizeText } from './sanitize.util';
 
 @Injectable()
 export class SessionsService {
@@ -106,7 +107,7 @@ export class SessionsService {
    */
   async getSession(sessionId: string): Promise<SessionDto> {
     const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
+      where: { id: sanitizeIdentifier(sessionId) as string },
     });
 
     if (!session) {
@@ -124,8 +125,9 @@ export class SessionsService {
     sessionId: string,
     dto: UpdateSessionDto,
   ): Promise<SessionDto> {
+    const id = sanitizeIdentifier(sessionId) as string;
     const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
+      where: { id },
     });
 
     if (!session) {
@@ -137,9 +139,12 @@ export class SessionsService {
     }
 
     const updated = await this.prisma.session.update({
-      where: { id: sessionId },
+      where: { id },
       data: {
-        displayName: dto.displayName,
+        // Re-sanitize so a direct caller bypassing the DTO transform cannot
+        // persist padded or tag-wrapped display names.
+        displayName:
+          dto.displayName === undefined ? undefined : (sanitizeText(dto.displayName) as string),
       },
     });
 
@@ -150,8 +155,9 @@ export class SessionsService {
    * Revoke a specific session
    */
   async revokeSession(userId: string, sessionId: string): Promise<RevokeSessionDto> {
+    const id = sanitizeIdentifier(sessionId) as string;
     const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
+      where: { id },
     });
 
     if (!session) {
@@ -163,7 +169,7 @@ export class SessionsService {
     }
 
     await this.prisma.session.update({
-      where: { id: sessionId },
+      where: { id },
       data: {
         isRevoked: true,
         revokedAt: new Date(),
@@ -171,11 +177,11 @@ export class SessionsService {
     });
 
     // Drop any real-time sockets bound to this session (issue #1294)
-    await this.revocation?.publishRevoked([sessionId]);
+    await this.revocation?.publishRevoked([id]);
 
     return {
       message: 'Session revoked successfully',
-      sessionId,
+      sessionId: id,
     };
   }
 

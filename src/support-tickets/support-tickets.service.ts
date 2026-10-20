@@ -222,18 +222,30 @@ export class SupportTicketsService {
     const where: any = {};
     if (agentId) where.assignedToId = agentId;
 
-    const [total, open, resolved, breached] = await Promise.all([
-      this.prisma.supportTicket.count({ where }),
-      this.prisma.supportTicket.count({
-        where: { ...where, status: { in: ['NEW', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER'] } },
+    // One grouped query replaces three counts: every ticket has a status, so the
+    // total is the sum of the group sizes, and the open/resolved buckets are two
+    // of the groups. Only the SLA-breach count needs its own query.
+    const [statusGroups, breached] = await Promise.all([
+      (this.prisma.supportTicket as any).groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
       }),
-      this.prisma.supportTicket.count({
-        where: { ...where, status: { in: ['RESOLVED', 'CLOSED'] } },
-      }),
-      this.prisma.supportTicket.count({
-        where: { ...where, slaBreached: true },
-      }),
+      this.prisma.supportTicket.count({ where: { ...where, slaBreached: true } }),
     ]);
+
+    const OPEN_STATUSES = new Set(['NEW', 'IN_PROGRESS', 'WAITING_ON_CUSTOMER']);
+    const RESOLVED_STATUSES = new Set(['RESOLVED', 'CLOSED']);
+
+    let total = 0;
+    let open = 0;
+    let resolved = 0;
+    for (const group of statusGroups as Array<{ status: string; _count: { _all: number } }>) {
+      const count = group._count._all;
+      total += count;
+      if (OPEN_STATUSES.has(group.status)) open += count;
+      if (RESOLVED_STATUSES.has(group.status)) resolved += count;
+    }
 
     return { total, open, resolved, breached };
   }
@@ -252,12 +264,18 @@ export class SupportTicketsService {
       include: { user: { select: { id: true, firstName: true, email: true } } },
     });
 
-    for (const ticket of breachedTickets) {
-      await this.prisma.supportTicket.update({
-        where: { id: ticket.id },
-        data: { slaBreached: true },
-      });
+    if (breachedTickets.length === 0) {
+      return;
+    }
 
+    // One update for every breached row replaces the previous one-update-per-ticket
+    // N+1, which was especially costly on a scheduled job.
+    await this.prisma.supportTicket.updateMany({
+      where: { id: { in: breachedTickets.map((ticket) => ticket.id) } },
+      data: { slaBreached: true },
+    });
+
+    for (const ticket of breachedTickets) {
       this.logger.warn(`SLA breached for ticket ${ticket.id} (priority: ${ticket.priority})`);
 
       // Notify assigned agent

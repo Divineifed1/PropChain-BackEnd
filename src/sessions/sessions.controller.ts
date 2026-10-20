@@ -4,6 +4,7 @@ import { SessionsService } from './sessions.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthUserPayload } from '../auth/types/auth-user.type';
+import { sanitizeIdentifier } from './sanitize.util';
 import {
   SessionsListDto,
   RevokeSessionDto,
@@ -31,7 +32,7 @@ export class SessionsController {
    */
   @Get(':sessionId')
   async getSession(@Param('sessionId') sessionId: string, @CurrentUser() _user: AuthUserPayload) {
-    return this.sessionsService.getSession(sessionId);
+    return this.sessionsService.getSession(sanitizeIdentifier(sessionId) as string);
   }
 
   /**
@@ -43,7 +44,11 @@ export class SessionsController {
     @Body() dto: UpdateSessionDto,
     @CurrentUser() user: AuthUserPayload,
   ): Promise<import('./dto/session.dto').SessionDto> {
-    return this.sessionsService.updateSession(user.sub, sessionId, dto);
+    return this.sessionsService.updateSession(
+      user.sub,
+      sanitizeIdentifier(sessionId) as string,
+      dto,
+    );
   }
 
   /**
@@ -54,7 +59,7 @@ export class SessionsController {
     @Param('sessionId') sessionId: string,
     @CurrentUser() user: AuthUserPayload,
   ): Promise<RevokeSessionDto> {
-    return this.sessionsService.revokeSession(user.sub, sessionId);
+    return this.sessionsService.revokeSession(user.sub, sanitizeIdentifier(sessionId) as string);
   }
 
   /**
