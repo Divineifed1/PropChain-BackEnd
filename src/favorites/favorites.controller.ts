@@ -7,6 +7,7 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { FavoritesService } from './favorites.service';
@@ -14,8 +15,10 @@ import { ListFavoritesQueryDto } from './dto/favorite.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AuthUserPayload } from '../auth/types/auth-user.type';
+import { FavoritesTraceInterceptor } from './interceptors/favorites-trace.interceptor';
 
 @ApiTags('Favorites')
+@UseInterceptors(FavoritesTraceInterceptor)
 @Controller('favorites')
 export class FavoritesController {
   constructor(private readonly favoritesService: FavoritesService) {}
