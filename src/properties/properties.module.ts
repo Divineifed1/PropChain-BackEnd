@@ -14,6 +14,7 @@ import { FraudModule } from '../fraud/fraud.module';
 import { DocumentsModule } from '../documents/documents.module';
 import { PropertyReportService } from './report/property-report.service';
 import { CacheModuleConfig } from '../cache/cache.module';
+import { PropertiesListingsCacheService } from './properties-listings-cache.service';
 import { PropertiesCacheService } from './properties-cache.service';
 import { PropertiesRouteRateLimitGuard } from './guards/properties-route-rate-limit.guard';
 import { RateLimitService } from '../auth/rate-limit.service';
@@ -35,6 +36,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
     GeocodingService,
     PropertyExpiryService,
     PropertyReportService,
+    PropertiesListingsCacheService,
     PropertiesCacheService,
     RateLimitService,
     PropertiesRouteRateLimitGuard,
@@ -45,6 +47,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
     PropertyImagesService,
     GeocodingService,
     PropertyExpiryService,
+    PropertiesListingsCacheService,
     PropertiesCacheService,
   ],
 })

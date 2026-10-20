@@ -45,6 +45,7 @@ import {
 } from '@nestjs/swagger';
 
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ListingsMetricsInterceptor } from './interceptors/listings-metrics.interceptor';
 import { PropertiesMetricsInterceptor } from './interceptors/properties-metrics.interceptor';
 import {
   PropertiesRouteLimit,
@@ -70,6 +71,7 @@ export class PropertiesController {
   }
 
   @Get()
+  @UseInterceptors(ListingsMetricsInterceptor)
   @ApiOperation({
     summary: 'List published property listings',
     description:
@@ -94,6 +96,7 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
    * Defined before `:id` so the static path is matched first.
    */
   @Get('search')
+  @UseInterceptors(ListingsMetricsInterceptor)
   @ApiOperation({
     summary: 'Search property listings',
     description:

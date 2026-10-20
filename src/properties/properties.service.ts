@@ -20,6 +20,7 @@ import { PropertyStatus, UserRole } from '../types/prisma.types';
 import { retryListingQuery } from './listing-retry.util';
 import { CacheService } from '../cache/cache.service';
 import { CACHE_TAGS } from '../cache/cache.config';
+import { PropertiesListingsCacheService } from './properties-listings-cache.service';
 import { PropertiesCacheService } from './properties-cache.service';
 import {
   canTransitionPropertyStatus,
@@ -54,6 +55,7 @@ export class PropertiesService {
     private readonly fraudService: FraudService,
     private readonly geocodingService: GeocodingService,
     private readonly cacheService: CacheService,
+    @Optional() private readonly listingsCache?: PropertiesListingsCacheService,
     @Optional() private readonly propertiesCache?: PropertiesCacheService,
   ) {}
 
@@ -626,6 +628,15 @@ export class PropertiesService {
    * the trust-score rules impossible to change independently.
    */
   async searchProperties(dto: SearchPropertiesDto): Promise<PaginatedPropertiesResult> {
+    // Served from Redis when the module is wired with PropertiesListingsCacheService.
+    if (this.listingsCache) {
+      return this.listingsCache.rememberSearch(dto, () => this.runSearch(dto));
+    }
+    return this.runSearch(dto);
+  }
+
+  /** The search query itself, uncached. */
+  private async runSearch(dto: SearchPropertiesDto): Promise<PaginatedPropertiesResult> {
     const where = this.buildSearchWhereClause(dto);
     const page = dto.page && dto.page > 0 ? dto.page : 1;
     const limit = dto.limit && dto.limit > 0 ? dto.limit : 20;
