@@ -1,4 +1,6 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { CleanText } from '../sanitize.util';
 
 export class SessionDto {
   id: string;
@@ -43,6 +45,7 @@ export class RevokeAllSessionsDto {
 
 export class UpdateSessionDto {
   @IsOptional()
+  @Transform(CleanText)
   @IsString()
   @MaxLength(100)
   displayName?: string;
