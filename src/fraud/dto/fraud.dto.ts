@@ -1,4 +1,5 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { CleanText, TrimIdentifier } from '../sanitize.util';
 import {
   IsBoolean,
   IsEnum,
@@ -62,6 +63,7 @@ export class ReviewFraudAlertDto {
   assignedToId?: string;
 
   @IsOptional()
+  @Transform(CleanText)
   @IsString()
   note?: string;
 
@@ -72,10 +74,12 @@ export class ReviewFraudAlertDto {
 }
 
 export class AddFraudInvestigationNoteDto {
+  @Transform(CleanText)
   @IsString()
   note!: string;
 
   @IsOptional()
+  @Transform(TrimIdentifier)
   @IsString()
   action?: string;
 
@@ -86,6 +90,7 @@ export class AddFraudInvestigationNoteDto {
 
 export class BlockFraudUserDto {
   @IsOptional()
+  @Transform(CleanText)
   @IsString()
   reason?: string;
 }

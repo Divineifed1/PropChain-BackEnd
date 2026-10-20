@@ -239,4 +239,71 @@ describe('FraudService', () => {
       'Automatically blocked by the fraud detection engine.',
     );
   });
+
+  describe('input sanitization (#1420)', () => {
+    it('strips HTML, control characters and padding from an investigation note', async () => {
+      mockPrismaService.fraudAlert.findUnique.mockResolvedValue({ id: 'alert-1' });
+      mockPrismaService.fraudInvestigationNote.create.mockResolvedValue({ id: 'note-1' });
+
+      await service.addInvestigationNote(
+        'alert-1',
+        { note: '  <b>Reviewed</b>\u0000   manually  ', action: '  REVIEWED  ' },
+        'actor-1',
+      );
+
+      expect(mockPrismaService.fraudInvestigationNote.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ note: 'Reviewed manually', action: 'REVIEWED' }),
+        }),
+      );
+    });
+
+    it('leaves the action undefined when it is not supplied', async () => {
+      mockPrismaService.fraudAlert.findUnique.mockResolvedValue({ id: 'alert-1' });
+      mockPrismaService.fraudInvestigationNote.create.mockResolvedValue({ id: 'note-1' });
+
+      await service.addInvestigationNote('alert-1', { note: 'note' }, 'actor-1');
+
+      expect(mockPrismaService.fraudInvestigationNote.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ action: undefined }) }),
+      );
+    });
+
+    it('sanitizes a block reason before it is persisted', async () => {
+      mockPrismaService.fraudAlert.findUnique.mockResolvedValue({
+        id: 'alert-1',
+        userId: 'user-1',
+      });
+      const blockSpy = jest
+        .spyOn(service as unknown as FraudServiceInternals, 'blockUserForFraud')
+        .mockResolvedValue(undefined as any);
+      jest.spyOn(service, 'getAlertDetails').mockResolvedValue({ id: 'alert-1' } as any);
+
+      await service.blockUserFromAlert('alert-1', 'actor-1', {
+        reason: '  <i>Confirmed</i>  fraud\u0000  ',
+      });
+
+      expect(blockSpy).toHaveBeenCalledWith('user-1', 'alert-1', 'actor-1', 'Confirmed fraud');
+    });
+
+    it('falls back to the default reason when none is supplied', async () => {
+      mockPrismaService.fraudAlert.findUnique.mockResolvedValue({
+        id: 'alert-1',
+        userId: 'user-1',
+      });
+      const blockSpy = jest
+        .spyOn(service as unknown as FraudServiceInternals, 'blockUserForFraud')
+        .mockResolvedValue(undefined as any);
+      jest.spyOn(service, 'getAlertDetails').mockResolvedValue({ id: 'alert-1' } as any);
+
+      await service.blockUserFromAlert('alert-1', 'actor-1', {});
+
+      expect(blockSpy).toHaveBeenCalledWith(
+        'user-1',
+        'alert-1',
+        'actor-1',
+        'User blocked from fraud investigation workflow.',
+      );
+    });
+  });
 });
