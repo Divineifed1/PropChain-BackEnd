@@ -13,6 +13,7 @@ import {
   ReviewFraudAlertDto,
 } from './dto/fraud.dto';
 import { FraudPattern, FraudSeverity, FraudStatus } from '../types/prisma.types';
+import { sanitizeIdentifier, sanitizeText } from './sanitize.util';
 
 type DetectionSubject = {
   userId?: string;
@@ -571,8 +572,11 @@ export class FraudService {
       data: {
         alertId,
         actorId,
-        action: payload.action,
-        note: payload.note,
+        // Re-sanitize so a direct caller bypassing the DTO transforms cannot
+        // persist padded, control-character or tag-wrapped notes.
+        action:
+          payload.action === undefined ? undefined : (sanitizeIdentifier(payload.action) as string),
+        note: sanitizeText(payload.note) as string,
         metadata: payload.metadata as Prisma.InputJsonValue | undefined,
       },
       include: {
@@ -598,7 +602,9 @@ export class FraudService {
       alert.userId,
       alertId,
       actorId,
-      payload?.reason ?? 'User blocked from fraud investigation workflow.',
+      payload?.reason
+        ? (sanitizeText(payload.reason) as string)
+        : 'User blocked from fraud investigation workflow.',
     );
 
     return this.getAlertDetails(alertId);
