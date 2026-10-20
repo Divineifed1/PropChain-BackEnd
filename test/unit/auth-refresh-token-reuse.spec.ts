@@ -50,6 +50,7 @@ describe('AuthService.refreshToken – token-reuse attack', () => {
       upsert: jest.fn(),
       update: jest.fn(),
       findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(2),
     },
     user: {
       findUnique: jest.fn(),
@@ -77,7 +78,7 @@ describe('AuthService.refreshToken – token-reuse attack', () => {
       };
       return config[key];
     }),
-  } as ConfigService;
+  } as unknown as ConfigService;
   const mockEmailService = {
     sendAccountLockedEmail: jest.fn().mockResolvedValue(undefined),
     sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -282,8 +283,8 @@ describe('AuthService.refreshToken – token-reuse attack', () => {
       service.refreshToken({ refreshToken: token }, '2.2.2.2', 'ThiefAgent'),
     ).rejects.toThrow(UnauthorizedException);
 
-    // The reused JTI should have been queried for family tokens
-    expect(mockPrisma.blacklistedToken.findMany).toHaveBeenCalledWith(
+    // The reused family should have been counted (service logs the family size)
+    expect(mockPrisma.blacklistedToken.count).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           tokenFamily: 'family-to-kill',

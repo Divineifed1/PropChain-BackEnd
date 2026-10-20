@@ -8,7 +8,6 @@ import { PrismaService } from '../../src/database/prisma.service';
 class FakePrismaService {
   users = new Map<string, any>();
   properties = new Map<string, any>();
-  blacklistedToken = new Map<string, any>();
 
   async $connect() {}
   async $disconnect() {}

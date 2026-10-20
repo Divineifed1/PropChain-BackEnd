@@ -27,6 +27,7 @@ import { SessionsService } from '../../src/sessions/sessions.service';
 import { AuthService } from '../../src/auth/auth.service';
 import { JwtAuthGuard } from '../../src/auth/guards/jwt-auth.guard';
 import { AuthUserPayload } from '../../src/auth/types/auth-user.type';
+import { UserTier } from '../../src/types/prisma.types';
 
 const TEST_USER_ID = 'test-user-profile-001';
 
@@ -41,6 +42,7 @@ class MockJwtAuthGuard implements CanActivate {
       sub: TEST_USER_ID,
       email: 'user@example.com',
       role: 'USER',
+      tier: UserTier.FREE,
       type: 'access',
     };
     req.user = user;

@@ -205,7 +205,9 @@ describe('ResponseFormatInterceptor', () => {
           // Assert
           expect(formattedError.success).toBe(false);
           expect(formattedError.message).toBe('Validation failed');
-          expect(formattedError.errors).toEqual(validationError.getResponse().errors);
+          expect(formattedError.errors).toEqual(
+            (validationError.getResponse() as { errors: unknown }).errors,
+          );
           expect(formattedError.statusCode).toBe(400);
           done();
         },

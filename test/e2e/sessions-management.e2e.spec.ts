@@ -26,6 +26,7 @@ import { SessionsService } from '../../src/sessions/sessions.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../src/auth/guards/jwt-auth.guard';
 import { AuthUserPayload } from '../../src/auth/types/auth-user.type';
+import { UserTier } from '../../src/types/prisma.types';
 
 const TEST_USER_ID = 'sessions-user-001';
 
@@ -38,6 +39,7 @@ class MockJwtAuthGuard implements CanActivate {
       sub: TEST_USER_ID,
       email: 'sessions@example.com',
       role: 'USER',
+      tier: UserTier.FREE,
       type: 'access',
     };
     req.user = user;

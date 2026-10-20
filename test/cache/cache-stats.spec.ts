@@ -53,7 +53,7 @@ describe('CacheStatsController', () => {
 
 describe('CacheHeadersInterceptor', () => {
   it('sets cache headers on response', (done) => {
-    const interceptor = new CacheHeadersInterceptor();
+    const interceptor = new CacheHeadersInterceptor(new CacheMonitoringService());
     const mockRes = { setHeader: jest.fn(), getHeader: jest.fn() };
     const mockReq = { path: '/' };
     const ctx = {

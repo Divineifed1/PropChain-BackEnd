@@ -103,8 +103,8 @@ describe('RequestIdMiddleware', () => {
 
     const firstRequest = { headers: {} } as Request;
     const secondRequest = { headers: {} } as Request;
-    const firstResponse = { setHeader: jest.fn() } as Response;
-    const secondResponse = { setHeader: jest.fn() } as Response;
+    const firstResponse = { setHeader: jest.fn() } as unknown as Response;
+    const secondResponse = { setHeader: jest.fn() } as unknown as Response;
 
     let firstCapturedId: string | undefined;
     let secondCapturedId: string | undefined;

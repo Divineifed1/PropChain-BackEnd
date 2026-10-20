@@ -298,16 +298,21 @@ describe('BackupService e2e — schedule, status, and restore flows', () => {
 
     it('handles restore failure correctly and updates database status', async () => {
       // Mock execFile to simulate failure
+      type ExecFileParams = Parameters<typeof childProcess.execFile>;
       const execFileSpy = jest
         .spyOn(childProcess, 'execFile')
         .mockImplementationOnce(
           (
-            cmd: string,
-            args: string[],
-            callback: (error: any, stdout: string, stderr: string) => void,
-          ) => {
-            callback(new Error('psql command failed'), '', 'psql: error: connection failed');
-            return {};
+            _file: ExecFileParams[0],
+            _args: ExecFileParams[1],
+            options: ExecFileParams[2],
+            callback: ExecFileParams[3],
+          ): ReturnType<typeof childProcess.execFile> => {
+            // promisify() invokes execFile(file, args, callback) — the callback can
+            // arrive in the options slot, so accept both call shapes.
+            const cb = typeof options === 'function' ? options : callback;
+            cb?.(new Error('psql command failed'), '', 'psql: error: connection failed');
+            return {} as ReturnType<typeof childProcess.execFile>;
           },
         );
 

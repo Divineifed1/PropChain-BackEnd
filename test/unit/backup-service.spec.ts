@@ -134,7 +134,7 @@ describe('BackupService - PG dump & checksum', () => {
 
     (fs.promises.stat as jest.Mock).mockResolvedValue({ size: 1024 });
 
-    const readStream = {
+    const readStream: { on: (event: string, cb: any) => unknown } = {
       on: jest.fn((event: string, cb: any) => {
         if (event === 'data') cb(Buffer.from('dump content'));
         if (event === 'end') cb();
@@ -179,7 +179,7 @@ describe('BackupService - PG dump & checksum', () => {
     const dumpContent = 'CREATE TABLE test (id INT);';
     const expectedChecksum = crypto.createHash('sha256').update(dumpContent).digest('hex');
 
-    const readStream = {
+    const readStream: { on: (event: string, cb: any) => unknown } = {
       on: jest.fn((event: string, cb: any) => {
         if (event === 'data') cb(Buffer.from(dumpContent));
         if (event === 'end') cb();

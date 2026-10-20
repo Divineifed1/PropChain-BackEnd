@@ -12,6 +12,7 @@ import { DuplicateDetectionService } from '../../src/duplicate-detection/duplica
 import { FraudService } from '../../src/fraud/fraud.service';
 import { JwtAuthGuard } from '../../src/auth/guards/jwt-auth.guard';
 import { AuthUserPayload } from '../../src/auth/types/auth-user.type';
+import { UserTier } from '../../src/types/prisma.types';
 import { PrismaService } from '../../src/database/prisma.service';
 
 const OWNER_ID = '11111111-1111-4111-a111-111111111111';
@@ -29,6 +30,7 @@ class MockJwtAuthGuard implements CanActivate {
       sub: OWNER_ID,
       email: 'owner@example.com',
       role: 'USER' as any,
+      tier: UserTier.FREE,
       type: 'access',
     };
     requestContext.user = user;

@@ -5,6 +5,7 @@ import { AdminService } from '../../src/admin/admin.service';
 import { EmailService } from '../../src/email/email.service';
 import { ArchiveService } from '../../src/archive/archive.service';
 import { CleanupService } from '../../src/database/cleanup.service';
+import { I18nService } from '../../src/i18n/i18n.service';
 import { RolesGuard } from '../../src/auth/guards/roles.guard';
 import { ROLES_KEY } from '../../src/auth/decorators/roles.decorator';
 import { AuthUserPayload } from '../../src/auth/types/auth-user.type';
@@ -69,6 +70,7 @@ describe('AdminController - role enforcement', () => {
       {} as unknown as EmailService,
       {} as unknown as ArchiveService,
       {} as unknown as CleanupService,
+      {} as unknown as I18nService,
     );
 
     reflector = new Reflector();

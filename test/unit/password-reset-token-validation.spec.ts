@@ -108,7 +108,7 @@ describe('AuthService.resetPassword – password-reset token validation', () => 
       };
       return config[key];
     }),
-  } as ConfigService;
+  } as unknown as ConfigService;
   const mockEmailService = {
     sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
     sendEmail: jest.fn().mockResolvedValue(undefined),
@@ -175,7 +175,7 @@ describe('AuthService.resetPassword – password-reset token validation', () => 
       },
     });
 
-    mockPrisma.user.update.mockImplementation(async ({ where, data }) => ({
+    mockPrisma.user.update.mockImplementation(async ({ where, data }: any) => ({
       id: where.id,
       ...data,
     }));
