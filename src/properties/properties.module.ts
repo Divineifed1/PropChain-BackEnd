@@ -17,6 +17,7 @@ import { CacheModuleConfig } from '../cache/cache.module';
 import { PropertiesHealthController } from './properties-health.controller';
 import { PropertiesHealthIndicator } from './properties-health.indicator';
 import { PropertyInjectionGuardPipe } from './pipes/injection-guard.pipe';
+import { PropertiesListingsCacheService } from './properties-listings-cache.service';
 import { PropertiesCacheService } from './properties-cache.service';
 import { PropertiesRouteRateLimitGuard } from './guards/properties-route-rate-limit.guard';
 import { RateLimitService } from '../auth/rate-limit.service';
@@ -46,6 +47,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
     PropertyReportService,
     PropertiesHealthIndicator,
     PropertyInjectionGuardPipe,
+    PropertiesListingsCacheService,
     PropertiesCacheService,
     RateLimitService,
     PropertiesRouteRateLimitGuard,
@@ -56,6 +58,7 @@ import { RateLimitService } from '../auth/rate-limit.service';
     PropertyImagesService,
     GeocodingService,
     PropertyExpiryService,
+    PropertiesListingsCacheService,
     PropertiesCacheService,
   ],
 })

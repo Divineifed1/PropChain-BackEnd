@@ -36,7 +36,7 @@ import {
 import { CreateAmenityDto, UpdateAmenityDto } from './dto/amenity.dto';
 import { PropertyReportService } from './report/property-report.service';
 import { Response } from 'express';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+
 import { PropertiesTraceInterceptor } from './interceptors/properties-trace.interceptor';
 import { PropertyInjectionGuardPipe } from './pipes/injection-guard.pipe';
 import {
@@ -44,28 +44,18 @@ import {
   PropertiesPaginationQueryDto,
   buildPropertiesPageMeta,
 } from './dto/pagination-query.dto';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 
-@ApiTags('Properties')
-@UseInterceptors(PropertiesTraceInterceptor)
-
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiQuery,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
-
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { ListingsMetricsInterceptor } from './interceptors/listings-metrics.interceptor';
 import { PropertiesMetricsInterceptor } from './interceptors/properties-metrics.interceptor';
 import {
   PropertiesRouteLimit,
   PropertiesRouteRateLimitGuard,
 } from './guards/properties-route-rate-limit.guard';
- (feat(properties): Prometheus metrics, query optimisation, Redis caching, per-caller rate limits)
 
 @ApiTags('Properties')
 @UseInterceptors(PropertiesMetricsInterceptor)
+@UseInterceptors(PropertiesTraceInterceptor)
 @Controller('properties')
 export class PropertiesController {
   constructor(
@@ -90,7 +80,14 @@ export class PropertiesController {
    * `{ data, meta: { page, limit, total, totalPages, hasNext } }`.
    */
   @Get()
-  @ApiOperation({ summary: 'List published property listings', operationId: 'listProperties' })
+  @UseInterceptors(ListingsMetricsInterceptor)
+  @ApiOperation({
+    summary: 'List published property listings',
+    description:
+      'Unauthenticated. Returns only ACTIVE, non-deleted listings, newest first by default.' +
+      '\n\nRate limited to 100 requests per minute per client; see `X-RateLimit-*` response headers.',
+    operationId: 'listProperties',
+  })
   @ApiQuery({ name: 'page', required: false, minimum: 1, description: '1-based page number.' })
   @ApiQuery({
     name: 'limit',
@@ -104,6 +101,7 @@ export class PropertiesController {
     description: 'The listings, or a page of them when page/limit is supplied',
   })
   @ApiResponse({ status: 400, description: 'page or limit outside the accepted range' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async findAll(@Query() query: PropertiesPaginationQueryDto = {}) {
     const wantsPage = query.page !== undefined || query.limit !== undefined;
     if (!wantsPage) return this.propertiesService.findAll();
@@ -113,18 +111,6 @@ export class PropertiesController {
     const { items, total } = await this.propertiesService.findAllPaginated(page, limit);
 
     return { data: items, meta: buildPropertiesPageMeta(page, limit, total) };
-  @ApiOperation({
-    summary: 'List published property listings',
-    description:
-      'Unauthenticated. Returns only ACTIVE, non-deleted listings, newest first by default.
-
-Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response headers.',
-    operationId: 'listProperties',
-  })
-  @ApiResponse({ status: 200, description: 'The published listings' })
-  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
-  findAll() {
-    return this.propertiesService.findAll();
   }
 
   /**
@@ -137,29 +123,38 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
    * Defined before `:id` so the static path is matched first.
    */
   @Get('search')
+  @UseInterceptors(ListingsMetricsInterceptor)
   @UsePipes(PropertyInjectionGuardPipe)
   @ApiOperation({
     summary: 'Search property listings',
     description:
-      'Unauthenticated. Every filter is optional and they combine with AND.
-
-'
-      + 'The response is `{ items, total, page, limit, totalPages }`. Results are always '
-      + 'ACTIVE, non-deleted listings regardless of the `status` filter.
-
-'
-      + '`minNeighborhoodTrustScore` / `maxNeighborhoodTrustScore` filter on a score computed '
-      + 'from the neighborhood row, so it is applied in memory after fetching; a listing with '
-      + 'no neighborhood scores `null` and is excluded whenever either bound is set.
-
-'
-      + 'Rate limited to 60 searches per minute per client.',
+      'Unauthenticated. Every filter is optional and they combine with AND.\n\n' +
+      'The response is `{ items, total, page, limit, totalPages }`. Results are always ' +
+      'ACTIVE, non-deleted listings regardless of the `status` filter.\n\n' +
+      '`minNeighborhoodTrustScore` / `maxNeighborhoodTrustScore` filter on a score computed ' +
+      'from the neighborhood row, so it is applied in memory after fetching; a listing with ' +
+      'no neighborhood scores `null` and is excluded whenever either bound is set.\n\n' +
+      'Rate limited to 60 searches per minute per client.',
     operationId: 'searchProperties',
   })
-  @ApiQuery({ name: 'minPrice', required: false, type: Number, description: 'Lowest asking price.' })
-  @ApiQuery({ name: 'maxPrice', required: false, type: Number, description: 'Highest asking price.' })
+  @ApiQuery({
+    name: 'minPrice',
+    required: false,
+    type: Number,
+    description: 'Lowest asking price.',
+  })
+  @ApiQuery({
+    name: 'maxPrice',
+    required: false,
+    type: Number,
+    description: 'Highest asking price.',
+  })
   @ApiQuery({ name: 'city', required: false, description: 'City, case-insensitive.' })
-  @ApiQuery({ name: 'state', required: false, description: 'State/province/region, case-insensitive.' })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    description: 'State/province/region, case-insensitive.',
+  })
   @ApiQuery({ name: 'zipCode', required: false, description: 'Postal code.' })
   @ApiQuery({ name: 'country', required: false, description: 'Country, case-insensitive.' })
   @ApiQuery({
@@ -167,20 +162,59 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
     required: false,
     description: 'Free text matched against address, city, state and zipCode (OR).',
   })
-  @ApiQuery({ name: 'propertyType', required: false, description: 'HOUSE, APARTMENT, CONDO, LAND, ...' })
-  @ApiQuery({ name: 'bedrooms', required: false, type: Number, description: 'Exact bedroom count.' })
-  @ApiQuery({ name: 'minBedrooms', required: false, type: Number, description: 'Overrides `bedrooms` when both are given.' })
+  @ApiQuery({
+    name: 'propertyType',
+    required: false,
+    description: 'HOUSE, APARTMENT, CONDO, LAND, ...',
+  })
+  @ApiQuery({
+    name: 'bedrooms',
+    required: false,
+    type: Number,
+    description: 'Exact bedroom count.',
+  })
+  @ApiQuery({
+    name: 'minBedrooms',
+    required: false,
+    type: Number,
+    description: 'Overrides `bedrooms` when both are given.',
+  })
   @ApiQuery({ name: 'maxBedrooms', required: false, type: Number })
-  @ApiQuery({ name: 'bathrooms', required: false, type: Number, description: 'Exact count; half-baths allowed.' })
+  @ApiQuery({
+    name: 'bathrooms',
+    required: false,
+    type: Number,
+    description: 'Exact count; half-baths allowed.',
+  })
   @ApiQuery({ name: 'minBathrooms', required: false, type: Number })
   @ApiQuery({ name: 'maxBathrooms', required: false, type: Number })
-  @ApiQuery({ name: 'category', required: false, description: 'Listing category, case-insensitive.' })
+  @ApiQuery({
+    name: 'category',
+    required: false,
+    description: 'Listing category, case-insensitive.',
+  })
   @ApiQuery({ name: 'tag', required: false, description: 'Exact tag match (array containment).' })
-  @ApiQuery({ name: 'amenityType', required: false, description: 'Requires at least one amenity of this type.' })
+  @ApiQuery({
+    name: 'amenityType',
+    required: false,
+    description: 'Requires at least one amenity of this type.',
+  })
   @ApiQuery({ name: 'minYearBuilt', required: false, type: Number })
   @ApiQuery({ name: 'maxYearBuilt', required: false, type: Number })
-  @ApiQuery({ name: 'minNeighborhoodTrustScore', required: false, type: Number, minimum: 0, maximum: 100 })
-  @ApiQuery({ name: 'maxNeighborhoodTrustScore', required: false, type: Number, minimum: 0, maximum: 100 })
+  @ApiQuery({
+    name: 'minNeighborhoodTrustScore',
+    required: false,
+    type: Number,
+    minimum: 0,
+    maximum: 100,
+  })
+  @ApiQuery({
+    name: 'maxNeighborhoodTrustScore',
+    required: false,
+    type: Number,
+    minimum: 0,
+    maximum: 100,
+  })
   @ApiQuery({
     name: 'lat',
     required: false,
@@ -199,10 +233,30 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
     type: Number,
     description: 'Approximated as a bounding box (1 degree of latitude is about 111 km).',
   })
-  @ApiQuery({ name: 'minLat', required: false, type: Number, description: 'Bounding box south edge.' })
-  @ApiQuery({ name: 'maxLat', required: false, type: Number, description: 'Bounding box north edge.' })
-  @ApiQuery({ name: 'minLng', required: false, type: Number, description: 'Bounding box west edge.' })
-  @ApiQuery({ name: 'maxLng', required: false, type: Number, description: 'Bounding box east edge.' })
+  @ApiQuery({
+    name: 'minLat',
+    required: false,
+    type: Number,
+    description: 'Bounding box south edge.',
+  })
+  @ApiQuery({
+    name: 'maxLat',
+    required: false,
+    type: Number,
+    description: 'Bounding box north edge.',
+  })
+  @ApiQuery({
+    name: 'minLng',
+    required: false,
+    type: Number,
+    description: 'Bounding box west edge.',
+  })
+  @ApiQuery({
+    name: 'maxLng',
+    required: false,
+    type: Number,
+    description: 'Bounding box east edge.',
+  })
   @ApiQuery({ name: 'minExpiryDate', required: false, type: String, format: 'date-time' })
   @ApiQuery({ name: 'maxExpiryDate', required: false, type: String, format: 'date-time' })
   @ApiQuery({
@@ -227,7 +281,10 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   })
   @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
   @ApiResponse({ status: 200, description: 'A page of matching listings' })
-  @ApiResponse({ status: 400, description: 'A filter is out of range, or the geo parameters contradict' })
+  @ApiResponse({
+    status: 400,
+    description: 'A filter is out of range, or the geo parameters contradict',
+  })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   search(@Query() searchDto: SearchPropertiesDto) {
     return this.propertiesService.searchProperties(searchDto);
@@ -348,9 +405,9 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/status')
-  @UsePipes(PropertyInjectionGuardPipe)
   @UseGuards(PropertiesRouteRateLimitGuard)
   @PropertiesRouteLimit({ max: 20, windowMs: 60 * 60 * 1000 })
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkUpdatePropertyStatus(
     @Body() body: BulkPropertyStatusUpdateDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -363,9 +420,9 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/delete')
-  @UsePipes(PropertyInjectionGuardPipe)
   @UseGuards(PropertiesRouteRateLimitGuard)
   @PropertiesRouteLimit({ max: 20, windowMs: 60 * 60 * 1000 })
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkDeleteProperties(
     @Body() body: BulkPropertyDeleteDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -378,9 +435,9 @@ Rate limited to 100 requests per minute per client; see `X-RateLimit-*` response
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   @Post('bulk/export')
-  @UsePipes(PropertyInjectionGuardPipe)
   @UseGuards(PropertiesRouteRateLimitGuard)
   @PropertiesRouteLimit({ max: 10, windowMs: 60 * 60 * 1000 })
+  @UsePipes(PropertyInjectionGuardPipe)
   async bulkExportProperties(
     @Body() body: BulkPropertyExportDto,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
