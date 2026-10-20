@@ -12,13 +12,18 @@ describe('CommissionsService', () => {
     transaction: {
       findUnique: jest.fn(),
     },
+    user: {
+      findMany: jest.fn(),
+    },
     commission: {
       findUnique: jest.fn(),
       create: jest.fn(),
+      createMany: jest.fn(),
       updateMany: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
       aggregate: jest.fn(),
+      groupBy: jest.fn(),
     },
   };
 
@@ -48,15 +53,14 @@ describe('CommissionsService', () => {
           ],
         },
       });
-      mockPrismaService.commission.findUnique.mockResolvedValue(null);
+      mockPrismaService.commission.findMany.mockResolvedValue([]);
 
       await service.createCommissionsForTransaction('tx-1');
 
-      expect(mockPrismaService.commission.create).toHaveBeenCalledTimes(2);
-      expect(mockPrismaService.commission.create).toHaveBeenNthCalledWith(
-        1,
-        expect.objectContaining({
-          data: {
+      expect(mockPrismaService.commission.createMany).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.commission.createMany).toHaveBeenCalledWith({
+        data: [
+          {
             transactionId: 'tx-1',
             agentId: 'agent-1',
             propertyId: 'prop-1',
@@ -64,12 +68,7 @@ describe('CommissionsService', () => {
             rate: new Decimal('0.02'),
             status: 'PENDING',
           },
-        }),
-      );
-      expect(mockPrismaService.commission.create).toHaveBeenNthCalledWith(
-        2,
-        expect.objectContaining({
-          data: {
+          {
             transactionId: 'tx-1',
             agentId: 'agent-2',
             propertyId: 'prop-1',
@@ -77,8 +76,84 @@ describe('CommissionsService', () => {
             rate: new Decimal('0.035'),
             status: 'PENDING',
           },
-        }),
-      );
+        ],
+      });
+    });
+
+    it('does not issue a query per agent (no N+1)', async () => {
+      mockPrismaService.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        amount: new Decimal('100000'),
+        status: 'PENDING',
+        propertyId: 'prop-1',
+        property: {
+          agents: Array.from({ length: 25 }, (_, i) => ({
+            agentId: `agent-${i}`,
+            commissionRate: new Decimal('0.01'),
+          })),
+        },
+      });
+      mockPrismaService.commission.findMany.mockResolvedValue([]);
+
+      await service.createCommissionsForTransaction('tx-1');
+
+      // Exactly three queries total: transaction, existing-commissions, insert.
+      expect(mockPrismaService.commission.findMany).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.commission.createMany).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.commission.findUnique).not.toHaveBeenCalled();
+      expect(mockPrismaService.commission.create).not.toHaveBeenCalled();
+    });
+
+    it('skips agents that already have a commission record', async () => {
+      mockPrismaService.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        amount: new Decimal('500000'),
+        status: 'PENDING',
+        propertyId: 'prop-1',
+        property: {
+          agents: [
+            { agentId: 'agent-1', commissionRate: new Decimal('0.02') },
+            { agentId: 'agent-2', commissionRate: new Decimal('0.035') },
+          ],
+        },
+      });
+      mockPrismaService.commission.findMany.mockResolvedValue([{ agentId: 'agent-1' }]);
+
+      await service.createCommissionsForTransaction('tx-1');
+
+      expect(mockPrismaService.commission.createMany).toHaveBeenCalledWith({
+        data: [expect.objectContaining({ agentId: 'agent-2' })],
+      });
+    });
+
+    it('does not touch the database when every agent already has a commission', async () => {
+      mockPrismaService.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        amount: new Decimal('500000'),
+        status: 'PENDING',
+        propertyId: 'prop-1',
+        property: { agents: [{ agentId: 'agent-1', commissionRate: new Decimal('0.02') }] },
+      });
+      mockPrismaService.commission.findMany.mockResolvedValue([{ agentId: 'agent-1' }]);
+
+      await service.createCommissionsForTransaction('tx-1');
+
+      expect(mockPrismaService.commission.createMany).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when the transaction has no assigned agents', async () => {
+      mockPrismaService.transaction.findUnique.mockResolvedValue({
+        id: 'tx-1',
+        amount: new Decimal('500000'),
+        status: 'PENDING',
+        propertyId: 'prop-1',
+        property: { agents: [] },
+      });
+
+      await service.createCommissionsForTransaction('tx-1');
+
+      expect(mockPrismaService.commission.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.commission.createMany).not.toHaveBeenCalled();
     });
   });
 
@@ -137,27 +212,19 @@ describe('CommissionsService', () => {
   });
 
   describe('getStats', () => {
-    it('computes metrics globally for administrators', async () => {
-      mockPrismaService.commission.aggregate
-        .mockResolvedValueOnce({ _sum: { amount: new Decimal('30000') } }) // COMPLETED
-        .mockResolvedValueOnce({ _sum: { amount: new Decimal('15000') } }) // PENDING
-        .mockResolvedValueOnce({ _sum: { amount: new Decimal('0') } }); // CANCELLED
-      mockPrismaService.commission.count
-        .mockResolvedValueOnce(3) // COMPLETED
-        .mockResolvedValueOnce(2); // PENDING
-      mockPrismaService.commission.findMany.mockResolvedValue([
-        {
-          agentId: 'agent-1',
-          amount: new Decimal('10000'),
-          status: 'COMPLETED',
-          agent: { firstName: 'Agent', lastName: 'One', email: 'a1@test.com' },
-        },
-        {
-          agentId: 'agent-1',
-          amount: new Decimal('5000'),
-          status: 'PENDING',
-          agent: { firstName: 'Agent', lastName: 'One', email: 'a1@test.com' },
-        },
+    it('computes metrics globally for administrators from grouped queries', async () => {
+      mockPrismaService.commission.groupBy
+        .mockResolvedValueOnce([
+          { status: 'COMPLETED', _sum: { amount: new Decimal('30000') }, _count: { _all: 3 } },
+          { status: 'PENDING', _sum: { amount: new Decimal('15000') }, _count: { _all: 2 } },
+          { status: 'CANCELLED', _sum: { amount: new Decimal('0') }, _count: { _all: 0 } },
+        ])
+        .mockResolvedValueOnce([
+          { agentId: 'agent-1', status: 'COMPLETED', _sum: { amount: new Decimal('10000') } },
+          { agentId: 'agent-1', status: 'PENDING', _sum: { amount: new Decimal('5000') } },
+        ]);
+      mockPrismaService.user.findMany.mockResolvedValue([
+        { id: 'agent-1', firstName: 'Agent', lastName: 'One', email: 'a1@test.com' },
       ]);
 
       const result = await service.getStats({
@@ -173,10 +240,94 @@ describe('CommissionsService', () => {
       expect(result.agentStats).toEqual([
         expect.objectContaining({
           agentId: 'agent-1',
+          name: 'Agent One',
+          email: 'a1@test.com',
           earned: 10000,
           pending: 5000,
         }),
       ]);
+    });
+
+    it('aggregates admin stats with a bounded number of queries regardless of row count', async () => {
+      mockPrismaService.commission.groupBy
+        .mockResolvedValueOnce([
+          { status: 'COMPLETED', _sum: { amount: new Decimal('1') }, _count: { _all: 1 } },
+        ])
+        .mockResolvedValueOnce([]);
+      mockPrismaService.user.findMany.mockResolvedValue([]);
+
+      await service.getStats({
+        sub: 'admin-1',
+        email: 'admin@test.com',
+        role: 'ADMIN',
+        tier: 'FREE',
+        type: 'access',
+      });
+
+      // Two grouped queries + one bounded agent lookup: no full-table findMany.
+      expect(mockPrismaService.commission.groupBy).toHaveBeenCalledTimes(2);
+      expect(mockPrismaService.commission.findMany).not.toHaveBeenCalled();
+      expect(mockPrismaService.commission.aggregate).not.toHaveBeenCalled();
+      expect(mockPrismaService.commission.count).not.toHaveBeenCalled();
+    });
+
+    it('skips the agent lookup when there are no commissions', async () => {
+      mockPrismaService.commission.groupBy.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+      const result = await service.getStats({
+        sub: 'admin-1',
+        email: 'admin@test.com',
+        role: 'ADMIN',
+        tier: 'FREE',
+        type: 'access',
+      });
+
+      expect(mockPrismaService.user.findMany).not.toHaveBeenCalled();
+      expect(result.agentStats).toEqual([]);
+      expect(result.completedCount).toBe(0);
+      expect(result.pendingCount).toBe(0);
+    });
+
+    it('computes metrics for an agent with a single grouped query', async () => {
+      mockPrismaService.commission.groupBy.mockResolvedValueOnce([
+        { status: 'COMPLETED', _sum: { amount: new Decimal('7000') }, _count: { _all: 4 } },
+        { status: 'PENDING', _sum: { amount: new Decimal('2000') }, _count: { _all: 1 } },
+      ]);
+
+      const result = await service.getStats({
+        sub: 'agent-1',
+        email: 'a1@test.com',
+        role: 'AGENT',
+        tier: 'FREE',
+        type: 'access',
+      });
+
+      expect(result).toEqual({
+        earned: 7000,
+        pending: 2000,
+        completedCount: 4,
+        pendingCount: 1,
+      });
+      expect(mockPrismaService.commission.groupBy).toHaveBeenCalledTimes(1);
+      expect(mockPrismaService.commission.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { agentId: 'agent-1' } }),
+      );
+      expect(mockPrismaService.commission.aggregate).not.toHaveBeenCalled();
+      expect(mockPrismaService.commission.count).not.toHaveBeenCalled();
+    });
+
+    it('defaults missing status buckets to zero for an agent', async () => {
+      mockPrismaService.commission.groupBy.mockResolvedValueOnce([]);
+
+      const result = await service.getStats({
+        sub: 'agent-1',
+        email: 'a1@test.com',
+        role: 'AGENT',
+        tier: 'FREE',
+        type: 'access',
+      });
+
+      expect(result).toEqual({ earned: 0, pending: 0, completedCount: 0, pendingCount: 0 });
     });
   });
 });
